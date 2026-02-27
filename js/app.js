@@ -17,6 +17,10 @@
     let autoPreview = true;
     let previewDebounceTimer = null;
 
+    // Sessions/Sections state
+    let sectionPromptIsExercise = false; // used when opening section prompt
+    let currentSectionIndex = -1;        // current section index during playback
+
     // Multi-file state
     let activeFile = 'html'; // html | css | js
     const files = {
@@ -45,6 +49,7 @@
 
         // Controls
         btnRecord: $('#btnRecord'),
+        btnContinueRecord: $('#btnContinueRecord'),
         btnStopRecord: $('#btnStopRecord'),
         btnPlay: $('#btnPlay'),
         btnPause: $('#btnPause'),
@@ -117,7 +122,46 @@
         nvimStatusPercent: $('#nvimStatusPercent'),
 
         // Toast
-        toastContainer: $('#toastContainer')
+        toastContainer: $('#toastContainer'),
+
+        // Timeline Editor
+        btnEditRecording: $('#btnEditRecording'),
+        editorOverlay: $('#editorOverlay'),
+        btnCloseEditor: $('#btnCloseEditor'),
+        teFilterType: $('#teFilterType'),
+        teSelectAll: $('#teSelectAll'),
+        teDeleteSelected: $('#teDeleteSelected'),
+        teEventsList: $('#teEventsList'),
+        teTrimBefore: $('#teTrimBefore'),
+        teTrimAfter: $('#teTrimAfter'),
+        teAdjustTimes: $('#teAdjustTimes'),
+        teApply: $('#teApply'),
+        teEventCount: $('#teEventCount'),
+
+        // Sessions Sidebar
+        btnToggleSidebar: $('#btnToggleSidebar'),
+        sessionsSidebar: $('#sessionsSidebar'),
+        btnCloseSidebar: $('#btnCloseSidebar'),
+        sidebarSections: $('#sidebarSections'),
+
+        // Section/Exercise recording buttons
+        btnAddSection: $('#btnAddSection'),
+        btnAddExercise: $('#btnAddExercise'),
+
+        // Section prompt modal
+        sectionPromptOverlay: $('#sectionPromptOverlay'),
+        sectionPromptTitle: $('#sectionPromptTitle'),
+        sectionPromptInput: $('#sectionPromptInput'),
+        sectionPromptDesc: $('#sectionPromptDesc'),
+        btnCloseSectionPrompt: $('#btnCloseSectionPrompt'),
+        btnCancelSection: $('#btnCancelSection'),
+        btnConfirmSection: $('#btnConfirmSection'),
+
+        // Exercise pause bar
+        exercisePauseBar: $('#exercisePauseBar'),
+        exercisePauseTitle: $('#exercisePauseTitle'),
+        exercisePauseDesc: $('#exercisePauseDesc'),
+        btnSeeAnswer: $('#btnSeeAnswer')
     };
 
     // ==========================================
@@ -491,6 +535,15 @@
                 '</html>';
         }
 
+        // Record preview-update event during recording (explicit save/refresh)
+        if (withConsole && appMode === 'recording' && recorder.isRecording) {
+            var elapsed = Date.now() - recorder.startTime;
+            recorder.events.push({
+                time: elapsed,
+                type: 'preview-update'
+            });
+        }
+
         // Write to iframe using srcdoc (avoids const/let redeclaration errors)
         var iframe = elements.previewFrame;
         var container = iframe.parentNode;
@@ -606,6 +659,7 @@
 
         // Record button
         elements.btnRecord.addEventListener('click', startRecording);
+        elements.btnContinueRecord.addEventListener('click', continueRecording);
         elements.btnStopRecord.addEventListener('click', stopRecording);
 
         // Playback buttons
@@ -639,6 +693,42 @@
         elements.shortcutsOverlay.addEventListener('click', function(e) {
             if (e.target === elements.shortcutsOverlay) toggleShortcutsModal();
         });
+
+        // Timeline Editor modal
+        elements.btnEditRecording.addEventListener('click', openTimelineEditor);
+        elements.btnCloseEditor.addEventListener('click', closeTimelineEditor);
+        elements.editorOverlay.addEventListener('click', function(e) {
+            if (e.target === elements.editorOverlay) closeTimelineEditor();
+        });
+        elements.teFilterType.addEventListener('change', function() {
+            renderEventsList(elements.teFilterType.value);
+        });
+        elements.teSelectAll.addEventListener('click', toggleSelectAllEvents);
+        elements.teDeleteSelected.addEventListener('click', deleteSelectedEvents);
+        elements.teTrimBefore.addEventListener('click', trimBefore);
+        elements.teTrimAfter.addEventListener('click', trimAfter);
+        elements.teAdjustTimes.addEventListener('click', adjustTimes);
+        elements.teApply.addEventListener('click', applyTimelineEdits);
+
+        // Sessions sidebar
+        elements.btnToggleSidebar.addEventListener('click', toggleSidebar);
+        elements.btnCloseSidebar.addEventListener('click', toggleSidebar);
+
+        // Section/Exercise recording
+        elements.btnAddSection.addEventListener('click', function() { openSectionPrompt(false); });
+        elements.btnAddExercise.addEventListener('click', function() { openSectionPrompt(true); });
+        elements.btnCloseSectionPrompt.addEventListener('click', closeSectionPrompt);
+        elements.btnCancelSection.addEventListener('click', closeSectionPrompt);
+        elements.btnConfirmSection.addEventListener('click', confirmAddSection);
+        elements.sectionPromptOverlay.addEventListener('click', function(e) {
+            if (e.target === elements.sectionPromptOverlay) closeSectionPrompt();
+        });
+        elements.sectionPromptInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); confirmAddSection(); }
+        });
+
+        // Exercise pause: see answer
+        elements.btnSeeAnswer.addEventListener('click', function() { resumeFromExercise(); });
 
         // Layout: expand buttons
         elements.btnExpandEditor.addEventListener('click', function() { toggleExpand('editor'); });
@@ -677,11 +767,15 @@
 
         // UI updates
         elements.btnRecord.classList.add('recording', 'hidden');
+        elements.btnContinueRecord.classList.add('hidden');
         elements.btnStopRecord.classList.remove('hidden');
+        elements.btnAddSection.classList.remove('hidden');
+        elements.btnAddExercise.classList.remove('hidden');
         elements.btnPlay.classList.add('hidden');
         elements.btnPause.classList.add('hidden');
         elements.btnRestart.classList.add('hidden');
         elements.btnSave.classList.add('hidden');
+        elements.btnEditRecording.classList.add('hidden');
         elements.timelineContainer.classList.add('hidden');
         elements.speedControl.classList.add('hidden');
         elements.statusMessage.textContent = '\u23fa Gravando...';
@@ -715,6 +809,86 @@
 
         startRecordingTimer();
         showToast('Grava\u00e7\u00e3o iniciada! Comece a codificar.', 'info');
+    }
+
+    // ==========================================
+    // Continue Recording (append to existing)
+    // ==========================================
+    async function continueRecording() {
+        if (!currentRecording || appMode === 'recording') return;
+
+        // Stop any ongoing playback
+        if (appMode === 'playing' || appMode === 'paused') {
+            player.stop();
+            editor.updateOptions({ readOnly: false });
+            isIgnoringChanges = false;
+            elements.pauseBar.classList.add('hidden');
+        }
+
+        appMode = 'recording';
+
+        // Save existing events (remove 'end' event if present)
+        var previousEvents = currentRecording.events.filter(function(e) {
+            return e.type !== 'end';
+        });
+        var previousDuration = currentRecording.duration;
+
+        // UI updates
+        elements.btnRecord.classList.add('recording', 'hidden');
+        elements.btnContinueRecord.classList.add('hidden');
+        elements.btnStopRecord.classList.remove('hidden');
+        elements.btnAddSection.classList.remove('hidden');
+        elements.btnAddExercise.classList.remove('hidden');
+        elements.btnPlay.classList.add('hidden');
+        elements.btnPause.classList.add('hidden');
+        elements.btnRestart.classList.add('hidden');
+        elements.btnSave.classList.add('hidden');
+        elements.btnEditRecording.classList.add('hidden');
+        elements.timelineContainer.classList.add('hidden');
+        elements.speedControl.classList.add('hidden');
+        elements.statusMessage.textContent = '\u23fa Continuando grava\u00e7\u00e3o...';
+        elements.statusMessage.className = 'status-message recording';
+
+        // Start recorder normally (creates fresh init + listeners)
+        await recorder.startRecording(editor, {
+            language: 'html',
+            title: elements.lessonTitle.value,
+            audioEnabled: false
+        });
+
+        // Now replace recorder state to continue from previous recording:
+        // 1. Set startTime back so elapsed times continue from previous duration
+        recorder.startTime = Date.now() - previousDuration;
+
+        // 2. Replace recorder events with previous events + a file-change snapshot at the junction
+        recorder.events = previousEvents;
+
+        // Add a snapshot of current file states at the junction point
+        recorder.events.push({
+            time: previousDuration,
+            type: 'file-change',
+            file: activeFile,
+            fullContent: files[activeFile].model.getValue()
+        });
+
+        // Also record which tab is active at junction
+        recorder.events.push({
+            time: previousDuration,
+            type: 'tab-switch',
+            file: activeFile
+        });
+
+        // Dispose recorder's own content listener to avoid duplicates
+        if (recorder._disposable) {
+            recorder._disposable.dispose();
+            recorder._disposable = null;
+        }
+
+        // Track content changes for all file models
+        setupMultiFileRecording();
+
+        startRecordingTimer();
+        showToast('Continuando grava\u00e7\u00e3o a partir de ' + formatTime(previousDuration), 'info');
     }
 
     function setupMultiFileRecording() {
@@ -765,10 +939,14 @@
         // UI updates
         elements.btnRecord.classList.remove('recording');
         elements.btnRecord.classList.remove('hidden');
+        elements.btnContinueRecord.classList.remove('hidden');
         elements.btnStopRecord.classList.add('hidden');
+        elements.btnAddSection.classList.add('hidden');
+        elements.btnAddExercise.classList.add('hidden');
         elements.btnPlay.classList.remove('hidden');
         elements.btnRestart.classList.remove('hidden');
         elements.btnSave.classList.remove('hidden');
+        elements.btnEditRecording.classList.remove('hidden');
         elements.speedControl.classList.remove('hidden');
         elements.timelineContainer.classList.remove('hidden');
         elements.statusMessage.textContent = 'Grava\u00e7\u00e3o conclu\u00edda!';
@@ -780,6 +958,8 @@
             elements.totalTime.textContent = formatTime(currentRecording.duration);
             elements.currentTime.textContent = '00:00';
             renderTimelineMarkers();
+            currentSectionIndex = -1;
+            renderSidebarSections();
         }
 
         showToast('Grava\u00e7\u00e3o conclu\u00edda! Dura\u00e7\u00e3o: ' + formatTime(currentRecording.duration), 'success');
@@ -843,6 +1023,17 @@
             switchToFile(fileKey);
         };
 
+        // Handle section events (auto-pause on exercises)
+        player.onSection = function(sectionEvt) {
+            handleSectionDuringPlayback(sectionEvt);
+        };
+
+        // Handle preview-update events (replay preview refresh with console)
+        player.onPreviewUpdate = function() {
+            clearConsole();
+            updatePreview(true);
+        };
+
         player.play(editor);
 
         appMode = 'playing';
@@ -850,6 +1041,7 @@
         elements.btnPlay.classList.add('hidden');
         elements.btnPause.classList.remove('hidden');
         elements.btnRecord.classList.add('hidden');
+        elements.btnContinueRecord.classList.add('hidden');
         elements.timelineContainer.classList.remove('hidden');
         elements.statusMessage.textContent = '\u25b6 Reproduzindo...';
         elements.statusMessage.className = 'status-message playing';
@@ -913,7 +1105,9 @@
         elements.btnPlay.classList.remove('hidden');
         elements.btnPause.classList.add('hidden');
         elements.pauseBar.classList.add('hidden');
+        elements.exercisePauseBar.classList.add('hidden');
         elements.btnRecord.classList.remove('hidden');
+        elements.btnContinueRecord.classList.remove('hidden');
         elements.currentTime.textContent = '00:00';
         updateTimeline(0, 0);
         elements.statusMessage.textContent = 'Pronto para reproduzir';
@@ -921,6 +1115,8 @@
 
         editor.updateOptions({ readOnly: false });
         isIgnoringChanges = false;
+        currentSectionIndex = -1;
+        renderSidebarSections();
     }
 
     function handlePlayerStateChange(state) {}
@@ -931,12 +1127,17 @@
         elements.btnPlay.classList.remove('hidden');
         elements.btnPause.classList.add('hidden');
         elements.pauseBar.classList.add('hidden');
+        elements.exercisePauseBar.classList.add('hidden');
         elements.btnRecord.classList.remove('hidden');
+        elements.btnContinueRecord.classList.remove('hidden');
         elements.statusMessage.textContent = 'Reprodu\u00e7\u00e3o finalizada. Edite o c\u00f3digo!';
         elements.statusMessage.className = 'status-message';
 
         editor.updateOptions({ readOnly: false });
         isIgnoringChanges = false;
+
+        currentSectionIndex = -1;
+        renderSidebarSections();
 
         showToast('Reprodu\u00e7\u00e3o finalizada! Agora voc\u00ea pode editar o c\u00f3digo.', 'success');
     }
@@ -995,6 +1196,28 @@
             marker.style.left = pct + '%';
             elements.timelineEvents.appendChild(marker);
         }
+
+        // Add section markers on the timeline
+        var sections = currentRecording.events.filter(function(e) { return e.type === 'section'; });
+        sections.forEach(function(sect) {
+            var pct = (sect.time / currentRecording.duration) * 100;
+            var sMarker = document.createElement('div');
+            sMarker.className = 'timeline-section-marker' + (sect.isExercise ? '' : ' lesson');
+            sMarker.style.left = pct + '%';
+            sMarker.title = (sect.isExercise ? '🏋️ ' : '📌 ') + sect.title;
+            elements.timelineEvents.appendChild(sMarker);
+        });
+
+        // Add preview-update markers on the timeline
+        var previewUpdates = currentRecording.events.filter(function(e) { return e.type === 'preview-update'; });
+        previewUpdates.forEach(function(pu) {
+            var pct = (pu.time / currentRecording.duration) * 100;
+            var puMarker = document.createElement('div');
+            puMarker.className = 'timeline-section-marker preview';
+            puMarker.style.left = pct + '%';
+            puMarker.title = '🔄 Preview atualizado';
+            elements.timelineEvents.appendChild(puMarker);
+        });
     }
 
     // ==========================================
@@ -1064,6 +1287,8 @@
                 elements.btnPlay.classList.remove('hidden');
                 elements.btnRestart.classList.remove('hidden');
                 elements.btnSave.classList.remove('hidden');
+                elements.btnEditRecording.classList.remove('hidden');
+                elements.btnContinueRecord.classList.remove('hidden');
                 elements.speedControl.classList.remove('hidden');
                 elements.timelineContainer.classList.remove('hidden');
                 elements.totalTime.textContent = formatTime(recording.duration);
@@ -1073,6 +1298,10 @@
 
                 renderTimelineMarkers();
                 updateTimeline(0, 0);
+
+                // Render sidebar sections if the recording has them
+                currentSectionIndex = -1;
+                renderSidebarSections();
 
                 showToast('"' + recording.title + '" carregada! Dura\u00e7\u00e3o: ' + formatTime(recording.duration), 'success');
             } catch (err) {
@@ -1167,16 +1396,28 @@
             resetLayout();
         }
 
+        // Ctrl+Shift+S to toggle sessions sidebar
+        if (e.ctrlKey && e.shiftKey && e.code === 'KeyS') {
+            e.preventDefault();
+            toggleSidebar();
+        }
+
         // Ctrl+/ to toggle shortcuts modal
         if (e.ctrlKey && !e.shiftKey && (e.code === 'Slash' || e.key === '/')) {
             e.preventDefault();
             toggleShortcutsModal();
         }
 
-        // Escape to close pause bar or shortcuts modal
+        // Escape to close modals or pause bar
         if (e.code === 'Escape') {
-            if (!elements.shortcutsOverlay.classList.contains('hidden')) {
+            if (!elements.sectionPromptOverlay.classList.contains('hidden')) {
+                closeSectionPrompt();
+            } else if (!elements.editorOverlay.classList.contains('hidden')) {
+                closeTimelineEditor();
+            } else if (!elements.shortcutsOverlay.classList.contains('hidden')) {
                 toggleShortcutsModal();
+            } else if (!elements.exercisePauseBar.classList.contains('hidden')) {
+                resumeFromExercise();
             } else if (appMode === 'paused') {
                 resumePlayback(false);
             }
@@ -1292,6 +1533,503 @@
             document.body.style.userSelect = '';
             handle.classList.remove('active');
         });
+    }
+
+    // ==========================================
+    // Timeline Editor
+    // ==========================================
+    var teEditedEvents = []; // Working copy of events for editing
+
+    function openTimelineEditor() {
+        if (!currentRecording || !currentRecording.events) {
+            showToast('Nenhuma gravação para editar.', 'error');
+            return;
+        }
+
+        // Deep clone events so edits don't affect original until apply
+        teEditedEvents = JSON.parse(JSON.stringify(currentRecording.events));
+
+        elements.teFilterType.value = 'all';
+        renderEventsList('all');
+        elements.editorOverlay.classList.remove('hidden');
+    }
+
+    function closeTimelineEditor() {
+        elements.editorOverlay.classList.add('hidden');
+        teEditedEvents = [];
+    }
+
+    function renderEventsList(filter) {
+        var list = elements.teEventsList;
+        list.innerHTML = '';
+
+        var eventsToShow = teEditedEvents.map(function(evt, idx) {
+            return { event: evt, originalIndex: idx };
+        });
+
+        if (filter && filter !== 'all') {
+            eventsToShow = eventsToShow.filter(function(item) {
+                return item.event.type === filter;
+            });
+        }
+
+        // Update event count
+        elements.teEventCount.textContent = eventsToShow.length + ' de ' + teEditedEvents.length + ' eventos';
+
+        if (eventsToShow.length === 0) {
+            list.innerHTML = '<div class="te-empty">Nenhum evento encontrado</div>';
+            return;
+        }
+
+        eventsToShow.forEach(function(item) {
+            var evt = item.event;
+            var idx = item.originalIndex;
+
+            var row = document.createElement('div');
+            row.className = 'te-event-row';
+            row.dataset.index = idx;
+
+            // Checkbox
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'te-checkbox';
+            checkbox.dataset.index = idx;
+            checkbox.addEventListener('change', updateDeleteButtonState);
+
+            // Type badge
+            var badge = document.createElement('span');
+            badge.className = 'te-event-type te-type-' + evt.type;
+            badge.textContent = getEventTypeLabel(evt.type);
+
+            // Time
+            var time = document.createElement('span');
+            time.className = 'te-event-time';
+            time.textContent = formatTimeMs(evt.time);
+
+            // Time input for editing
+            var timeInput = document.createElement('input');
+            timeInput.type = 'number';
+            timeInput.className = 'te-time-input';
+            timeInput.value = evt.time;
+            timeInput.min = 0;
+            timeInput.title = 'Tempo em ms';
+            timeInput.dataset.index = idx;
+            timeInput.addEventListener('change', function(e) {
+                var newTime = parseInt(e.target.value, 10);
+                if (!isNaN(newTime) && newTime >= 0) {
+                    teEditedEvents[idx].time = newTime;
+                    time.textContent = formatTimeMs(newTime);
+                }
+            });
+
+            // File info
+            var fileInfo = document.createElement('span');
+            fileInfo.className = 'te-event-file';
+            if (evt.file) {
+                fileInfo.textContent = evt.file;
+            } else if (evt.activeFile) {
+                fileInfo.textContent = evt.activeFile;
+            }
+
+            // Preview / description
+            var preview = document.createElement('span');
+            preview.className = 'te-event-preview';
+            preview.textContent = getEventPreview(evt);
+
+            // Delete button
+            var deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn btn-icon btn-sm te-delete-btn';
+            deleteBtn.title = 'Remover este evento';
+            deleteBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+            deleteBtn.addEventListener('click', function() {
+                teEditedEvents.splice(idx, 1);
+                renderEventsList(elements.teFilterType.value);
+                showToast('Evento removido', 'info');
+            });
+
+            row.appendChild(checkbox);
+            row.appendChild(badge);
+            row.appendChild(time);
+            row.appendChild(timeInput);
+            row.appendChild(fileInfo);
+            row.appendChild(preview);
+            row.appendChild(deleteBtn);
+
+            list.appendChild(row);
+        });
+
+        updateDeleteButtonState();
+    }
+
+    function getEventTypeLabel(type) {
+        var labels = {
+            'init': 'Init',
+            'change': 'Change',
+            'file-change': 'Alteração',
+            'tab-switch': 'Tab',
+            'cursor': 'Cursor',
+            'selection': 'Seleção',
+            'section': 'Seção',
+            'preview-update': 'Preview',
+            'end': 'Fim'
+        };
+        return labels[type] || type;
+    }
+
+    function getEventPreview(evt) {
+        switch (evt.type) {
+            case 'init':
+                var fileCount = evt.files ? Object.keys(evt.files).length : 0;
+                return 'Estado inicial' + (fileCount ? ' (' + fileCount + ' arquivos)' : '');
+            case 'file-change':
+                var content = evt.fullContent || '';
+                return content.length > 60 ? content.substring(0, 60) + '...' : content || '(vazio)';
+            case 'change':
+                if (evt.changes && evt.changes.length > 0) {
+                    var c = evt.changes[0];
+                    var text = c.text || c.insertedText || '';
+                    return text.length > 40 ? text.substring(0, 40) + '...' : text || '(edição)';
+                }
+                return evt.fullContent ? evt.fullContent.substring(0, 60) + '...' : '(change)';
+            case 'tab-switch':
+                return 'Trocar para: ' + (evt.file || '');
+            case 'cursor':
+                if (evt.cursor) {
+                    return 'Ln ' + evt.cursor.lineNumber + ', Col ' + evt.cursor.column;
+                }
+                return 'Cursor';
+            case 'selection':
+                return 'Seleção';
+            case 'section':
+                return (evt.isExercise ? '🏋️ ' : '📌 ') + (evt.title || 'Seção');
+            case 'preview-update':
+                return '🔄 Atualização do preview';
+            case 'end':
+                return 'Fim da gravação';
+            default:
+                return evt.type;
+        }
+    }
+
+    function formatTimeMs(ms) {
+        var totalSeconds = Math.floor(ms / 1000);
+        var minutes = Math.floor(totalSeconds / 60);
+        var seconds = totalSeconds % 60;
+        var millis = ms % 1000;
+        return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0') + '.' + String(millis).padStart(3, '0');
+    }
+
+    function updateDeleteButtonState() {
+        var checked = elements.teEventsList.querySelectorAll('.te-checkbox:checked');
+        elements.teDeleteSelected.disabled = checked.length === 0;
+        elements.teDeleteSelected.textContent = checked.length > 0
+            ? 'Deletar selecionados (' + checked.length + ')'
+            : 'Deletar selecionados';
+    }
+
+    function toggleSelectAllEvents() {
+        var checkboxes = elements.teEventsList.querySelectorAll('.te-checkbox');
+        var allChecked = Array.from(checkboxes).every(function(cb) { return cb.checked; });
+
+        checkboxes.forEach(function(cb) {
+            cb.checked = !allChecked;
+        });
+
+        elements.teSelectAll.textContent = allChecked ? 'Selecionar todos' : 'Desmarcar todos';
+        updateDeleteButtonState();
+    }
+
+    function deleteSelectedEvents() {
+        var checked = elements.teEventsList.querySelectorAll('.te-checkbox:checked');
+        if (checked.length === 0) return;
+
+        // Collect indices to remove (from highest to lowest to avoid shifting)
+        var indices = [];
+        checked.forEach(function(cb) {
+            indices.push(parseInt(cb.dataset.index, 10));
+        });
+        indices.sort(function(a, b) { return b - a; });
+
+        // Prevent deleting init event (index 0)
+        var hasInit = indices.indexOf(0) !== -1;
+        if (hasInit) {
+            showToast('O evento Init não pode ser removido.', 'error');
+            indices = indices.filter(function(i) { return i !== 0; });
+        }
+
+        indices.forEach(function(idx) {
+            teEditedEvents.splice(idx, 1);
+        });
+
+        renderEventsList(elements.teFilterType.value);
+        showToast(indices.length + ' evento(s) removido(s)', 'info');
+    }
+
+    function trimBefore() {
+        var checked = elements.teEventsList.querySelectorAll('.te-checkbox:checked');
+        if (checked.length === 0) {
+            showToast('Selecione pelo menos um evento como referência.', 'error');
+            return;
+        }
+
+        var indices = [];
+        checked.forEach(function(cb) { indices.push(parseInt(cb.dataset.index, 10)); });
+        var minIndex = Math.min.apply(null, indices);
+
+        // Always keep init event (index 0)
+        if (minIndex <= 0) {
+            showToast('Nada para remover antes do Init.', 'info');
+            return;
+        }
+
+        var removed = teEditedEvents.splice(1, minIndex - 1);
+        renderEventsList(elements.teFilterType.value);
+        showToast(removed.length + ' evento(s) removido(s) antes da seleção', 'info');
+    }
+
+    function trimAfter() {
+        var checked = elements.teEventsList.querySelectorAll('.te-checkbox:checked');
+        if (checked.length === 0) {
+            showToast('Selecione pelo menos um evento como referência.', 'error');
+            return;
+        }
+
+        var indices = [];
+        checked.forEach(function(cb) { indices.push(parseInt(cb.dataset.index, 10)); });
+        var maxIndex = Math.max.apply(null, indices);
+
+        if (maxIndex >= teEditedEvents.length - 1) {
+            showToast('Nada para remover após a seleção.', 'info');
+            return;
+        }
+
+        var removed = teEditedEvents.splice(maxIndex + 1);
+        renderEventsList(elements.teFilterType.value);
+        showToast(removed.length + ' evento(s) removido(s) após a seleção', 'info');
+    }
+
+    function adjustTimes() {
+        if (teEditedEvents.length < 2) return;
+
+        // Recalculate times: keep relative gaps but remove large pauses (>2s become 500ms)
+        var maxGap = 2000;
+        var reducedGap = 500;
+
+        var adjusted = 0;
+        for (var i = 1; i < teEditedEvents.length; i++) {
+            var gap = teEditedEvents[i].time - teEditedEvents[i - 1].time;
+            if (gap > maxGap) {
+                var reduction = gap - reducedGap;
+                adjusted++;
+                // Shift this and all subsequent events
+                for (var j = i; j < teEditedEvents.length; j++) {
+                    teEditedEvents[j].time -= reduction;
+                }
+            }
+        }
+
+        // Ensure first event starts at 0
+        if (teEditedEvents[0].time !== 0) {
+            var offset = teEditedEvents[0].time;
+            teEditedEvents.forEach(function(evt) { evt.time -= offset; });
+        }
+
+        renderEventsList(elements.teFilterType.value);
+        showToast(adjusted + ' gap(s) maiores que 2s foram reduzidos', 'info');
+    }
+
+    function applyTimelineEdits() {
+        if (!currentRecording) return;
+
+        // Update the recording with edited events
+        currentRecording.events = teEditedEvents;
+
+        // Recalculate duration
+        if (teEditedEvents.length > 0) {
+            var lastTime = teEditedEvents[teEditedEvents.length - 1].time;
+            currentRecording.duration = lastTime;
+        }
+
+        // Update UI
+        elements.totalTime.textContent = formatTime(currentRecording.duration);
+        elements.currentTime.textContent = '00:00';
+        renderTimelineMarkers();
+        updateTimeline(0, 0);
+
+        closeTimelineEditor();
+        showToast('Alterações aplicadas! Eventos: ' + currentRecording.events.length + ', Duração: ' + formatTime(currentRecording.duration), 'success');
+    }
+
+    // ==========================================
+    // Sessions Sidebar
+    // ==========================================
+    function toggleSidebar() {
+        elements.sessionsSidebar.classList.toggle('hidden');
+        elements.btnToggleSidebar.classList.toggle('active');
+        renderSidebarSections();
+    }
+
+    function renderSidebarSections() {
+        var container = elements.sidebarSections;
+        container.innerHTML = '';
+
+        if (!currentRecording || !currentRecording.events) {
+            container.innerHTML = '<div class="sidebar-empty">Nenhuma sessão marcada.<br>Grave e adicione seções.</div>';
+            return;
+        }
+
+        var sections = currentRecording.events.filter(function(e) { return e.type === 'section'; });
+
+        if (sections.length === 0) {
+            container.innerHTML = '<div class="sidebar-empty">Nenhuma sessão marcada nesta gravação.</div>';
+            return;
+        }
+
+        sections.forEach(function(sect, idx) {
+            var item = document.createElement('div');
+            item.className = 'sidebar-section-item' + (sect.isExercise ? ' exercise' : '') + (idx === currentSectionIndex ? ' active' : '');
+            item.dataset.time = sect.time;
+            item.dataset.index = idx;
+
+            var icon = document.createElement('span');
+            icon.className = 'sidebar-section-icon';
+            if (sect.isExercise) {
+                icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
+            } else {
+                icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+            }
+
+            var info = document.createElement('div');
+            info.className = 'sidebar-section-info';
+
+            var title = document.createElement('span');
+            title.className = 'sidebar-section-title';
+            title.textContent = sect.title || ('Seção ' + (idx + 1));
+
+            var meta = document.createElement('span');
+            meta.className = 'sidebar-section-meta';
+            meta.textContent = formatTime(sect.time) + (sect.isExercise ? ' • Exercício' : '');
+
+            info.appendChild(title);
+            info.appendChild(meta);
+
+            item.appendChild(icon);
+            item.appendChild(info);
+
+            // Click to seek
+            item.addEventListener('click', function() {
+                if (!currentRecording) return;
+                if (appMode === 'idle' && currentRecording) {
+                    startPlayback();
+                }
+                player.seekTo(editor, sect.time);
+                updateTimeline(sect.time, sect.time / currentRecording.duration);
+                currentSectionIndex = idx;
+                renderSidebarSections();
+            });
+
+            container.appendChild(item);
+        });
+    }
+
+    // ==========================================
+    // Section/Exercise Recording
+    // ==========================================
+    function openSectionPrompt(isExercise) {
+        sectionPromptIsExercise = isExercise;
+        elements.sectionPromptTitle.textContent = isExercise ? 'Adicionar Exercício' : 'Adicionar Seção';
+        elements.sectionPromptInput.value = '';
+        elements.sectionPromptDesc.value = '';
+        elements.sectionPromptInput.placeholder = isExercise
+            ? 'Ex: Crie um botão de logout...'
+            : 'Ex: Criando o HTML base...';
+        elements.sectionPromptOverlay.classList.remove('hidden');
+        setTimeout(function() { elements.sectionPromptInput.focus(); }, 100);
+    }
+
+    function closeSectionPrompt() {
+        elements.sectionPromptOverlay.classList.add('hidden');
+    }
+
+    function confirmAddSection() {
+        var title = elements.sectionPromptInput.value.trim();
+        if (!title) {
+            elements.sectionPromptInput.focus();
+            showToast('Informe um título para a seção.', 'error');
+            return;
+        }
+
+        var description = elements.sectionPromptDesc.value.trim();
+
+        if (appMode === 'recording' && recorder.isRecording) {
+            var elapsed = Date.now() - recorder.startTime;
+            var sectionEvent = {
+                time: elapsed,
+                type: 'section',
+                title: title,
+                isExercise: sectionPromptIsExercise,
+                description: description || ''
+            };
+            recorder.events.push(sectionEvent);
+
+            var label = sectionPromptIsExercise ? 'Exercício' : 'Seção';
+            showToast(label + ' "' + title + '" adicionado(a) em ' + formatTime(elapsed), 'success');
+        }
+
+        closeSectionPrompt();
+    }
+
+    // ==========================================
+    // Exercise Auto-pause during Playback
+    // ==========================================
+    function handleSectionDuringPlayback(sectionEvt) {
+        // Update current section index
+        if (currentRecording) {
+            var sections = currentRecording.events.filter(function(e) { return e.type === 'section'; });
+            for (var i = 0; i < sections.length; i++) {
+                if (sections[i].time === sectionEvt.time && sections[i].title === sectionEvt.title) {
+                    currentSectionIndex = i;
+                    break;
+                }
+            }
+        }
+        renderSidebarSections();
+
+        if (sectionEvt.isExercise) {
+            exercisePause(sectionEvt);
+        }
+    }
+
+    function exercisePause(sectionEvt) {
+        // Pause player
+        player.pause(editor);
+        appMode = 'paused';
+
+        editor.updateOptions({ readOnly: false });
+        isIgnoringChanges = false;
+
+        // Show exercise bar instead of normal pause bar
+        elements.pauseBar.classList.add('hidden');
+        elements.exercisePauseBar.classList.remove('hidden');
+        elements.exercisePauseTitle.textContent = sectionEvt.title || 'Pratique agora!';
+        elements.exercisePauseDesc.textContent = sectionEvt.description || '';
+        if (!sectionEvt.description) {
+            elements.exercisePauseDesc.classList.add('hidden');
+        } else {
+            elements.exercisePauseDesc.classList.remove('hidden');
+        }
+
+        elements.btnPause.classList.add('hidden');
+        elements.btnPlay.classList.remove('hidden');
+        elements.statusMessage.textContent = '\u270f\ufe0f Exercício - Pratique!';
+        elements.statusMessage.className = 'status-message paused';
+
+        showToast('Exercício: ' + sectionEvt.title + ' — Edite o código e depois clique "Ver resposta"', 'info');
+    }
+
+    function resumeFromExercise() {
+        elements.exercisePauseBar.classList.add('hidden');
+        resumePlayback(false);
     }
 
     // ==========================================

@@ -24,6 +24,8 @@ class CodeCastPlayer {
         this.onContentChange = null;
         this.onFileChange = null;
         this.onTabSwitch = null;
+        this.onSection = null;
+        this.onPreviewUpdate = null;
 
         // Snapshot for resuming after student edits
         this._snapshotAtPause = null;
@@ -486,6 +488,20 @@ class CodeCastPlayer {
                 // Multi-file: switch to a different tab
                 if (event.file && this.onTabSwitch) {
                     this.onTabSwitch(event.file);
+                }
+                break;
+
+            case 'section':
+                // Section/exercise marker
+                if (this.onSection) {
+                    this.onSection(event);
+                }
+                break;
+
+            case 'preview-update':
+                // Preview refresh with console (recorded from Ctrl+S, Ctrl+Enter, Refresh)
+                if (this.onPreviewUpdate) {
+                    this.onPreviewUpdate();
                 }
                 break;
 

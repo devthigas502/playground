@@ -46,8 +46,24 @@
             <button id="btnShortcuts" class="btn btn-icon btn-shortcuts" title="Atalhos (Ctrl+/)">
                 <span>?</span>
             </button>
+            <button id="btnToggleSidebar" class="btn btn-icon" title="Sessões da aula">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            </button>
         </div>
     </header>
+
+    <!-- Sessions Sidebar -->
+    <aside class="sessions-sidebar hidden" id="sessionsSidebar">
+        <div class="sidebar-header">
+            <h3>Sessões</h3>
+            <button id="btnCloseSidebar" class="btn btn-icon btn-sm" title="Fechar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="sidebar-sections" id="sidebarSections">
+            <div class="sidebar-empty">Nenhuma sessão marcada.<br>Grave e adicione seções.</div>
+        </div>
+    </aside>
 
     <!-- Main Content -->
     <main class="main-content">
@@ -141,11 +157,24 @@
                 <span class="record-dot"></span>
                 Gravar
             </button>
+            <button id="btnContinueRecord" class="btn btn-record hidden" title="Continuar gravação a partir do final">
+                <span class="record-dot"></span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:2px"><polyline points="14 2 14 8 20 8"/><path d="M4 19.5V15c0-3 2-5 5-5h5"/></svg>
+                Continuar
+            </button>
             <button id="btnStopRecord" class="btn btn-stop hidden" title="Parar gravação">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <rect x="4" y="4" width="16" height="16" rx="2"></rect>
                 </svg>
                 Parar
+            </button>
+            <button id="btnAddSection" class="btn btn-section hidden" title="Adicionar seção/capítulo">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
+                Seção
+            </button>
+            <button id="btnAddExercise" class="btn btn-exercise hidden" title="Adicionar exercício">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Exercício
             </button>
 
             <div class="divider"></div>
@@ -213,6 +242,13 @@
                 </svg>
                 Salvar
             </button>
+            <button id="btnEditRecording" class="btn hidden" title="Editar gravação">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                Editar
+            </button>
             <button id="btnLoad" class="btn" title="Carregar gravação">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -235,6 +271,26 @@
         </div>
     </footer>
 
+    <!-- Exercise pause overlay -->
+    <div id="exercisePauseBar" class="exercise-pause-bar hidden">
+        <div class="exercise-pause-content">
+            <div class="exercise-pause-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            </div>
+            <div class="exercise-pause-text">
+                <span class="exercise-pause-label">EXERCÍCIO</span>
+                <span class="exercise-pause-title" id="exercisePauseTitle">Pratique agora!</span>
+                <span class="exercise-pause-desc" id="exercisePauseDesc"></span>
+            </div>
+            <div class="exercise-pause-actions">
+                <button id="btnSeeAnswer" class="btn btn-sm exercise-btn-answer">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    Ver resposta
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Pause feedback bar (non-blocking, inside control bar area) -->
     <div id="pauseBar" class="pause-bar hidden">
         <div class="pause-bar-left">
@@ -247,6 +303,55 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                 Continuar
             </button>
+        </div>
+    </div>
+
+    <!-- Timeline Editor Modal -->
+    <div id="editorOverlay" class="shortcuts-overlay hidden">
+        <div class="timeline-editor-modal">
+            <div class="shortcuts-header">
+                <h3>Editar Gravação</h3>
+                <div class="te-header-actions">
+                    <span id="teEventCount" class="te-event-count"></span>
+                    <button id="btnCloseEditor" class="btn btn-icon btn-sm" title="Fechar">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            </div>
+            <!-- Toolbar -->
+            <div class="te-toolbar">
+                <div class="te-toolbar-left">
+                    <label class="te-filter-label">Filtrar:</label>
+                    <select id="teFilterType" class="te-select">
+                        <option value="all">Todos</option>
+                        <option value="init">Init</option>
+                        <option value="file-change">Alterações</option>
+                        <option value="tab-switch">Troca de aba</option>
+                        <option value="cursor">Cursor</option>
+                        <option value="selection">Seleção</option>
+                        <option value="change">Change (legacy)</option>
+                        <option value="section">Seção</option>
+                        <option value="preview-update">Preview</option>
+                    </select>
+                </div>
+                <div class="te-toolbar-right">
+                    <button id="teSelectAll" class="btn btn-sm" title="Selecionar todos visíveis">Selecionar todos</button>
+                    <button id="teDeleteSelected" class="btn btn-sm btn-danger" title="Deletar selecionados" disabled>Deletar selecionados</button>
+                </div>
+            </div>
+            <!-- Events list -->
+            <div id="teEventsList" class="te-events-list"></div>
+            <!-- Footer -->
+            <div class="te-footer">
+                <div class="te-footer-left">
+                    <button id="teTrimBefore" class="btn btn-sm" title="Remover todos os eventos antes do primeiro selecionado">Trim antes</button>
+                    <button id="teTrimAfter" class="btn btn-sm" title="Remover todos os eventos após o último selecionado">Trim depois</button>
+                    <button id="teAdjustTimes" class="btn btn-sm" title="Recalcular tempos para remover gaps">Recalcular tempos</button>
+                </div>
+                <div class="te-footer-right">
+                    <button id="teApply" class="btn btn-sm btn-primary">Aplicar alterações</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -282,6 +387,7 @@
                     <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd><span>Expandir editor</span></div>
                     <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd><span>Expandir browser/console</span></div>
                     <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd><span>Restaurar layout</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd><span>Sidebar de sessões</span></div>
                 </div>
                 <div class="shortcuts-group">
                     <h4>Editor</h4>
@@ -289,6 +395,28 @@
                     <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>S</kbd><span>Salvar / Atualizar</span></div>
                     <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>/</kbd><span>Mostrar atalhos</span></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section/Exercise Prompt Modal -->
+    <div id="sectionPromptOverlay" class="shortcuts-overlay hidden">
+        <div class="section-prompt-modal">
+            <div class="shortcuts-header">
+                <h3 id="sectionPromptTitle">Adicionar Seção</h3>
+                <button id="btnCloseSectionPrompt" class="btn btn-icon btn-sm" title="Fechar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="section-prompt-body">
+                <label class="section-prompt-label">Título:</label>
+                <input type="text" id="sectionPromptInput" class="section-prompt-input" placeholder="Ex: Criando o HTML base..." maxlength="80">
+                <label class="section-prompt-label">Descrição (opcional):</label>
+                <textarea id="sectionPromptDesc" class="section-prompt-textarea" placeholder="Ex: Crie um botão com a classe .btn..." rows="3" maxlength="200"></textarea>
+            </div>
+            <div class="section-prompt-footer">
+                <button id="btnCancelSection" class="btn btn-sm">Cancelar</button>
+                <button id="btnConfirmSection" class="btn btn-sm btn-primary">Adicionar</button>
             </div>
         </div>
     </div>
