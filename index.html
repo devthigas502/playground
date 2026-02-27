@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeCast - Editor Interativo</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <span>Playground</span>
+            </div>
+        </div>
+        <div class="header-center">
+            <input type="text" id="lessonTitle" class="lesson-title-input" placeholder="Nome da aula..." value="Minha Aula">
+        </div>
+        <div class="header-right">
+            <button id="btnAutoPreview" class="btn btn-sm btn-toggle active" title="Auto-preview ao digitar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                Auto
+            </button>
+            <select id="languageSelect" class="language-select hidden">
+                <option value="html" selected>HTML/CSS/JS</option>
+            </select>
+            <button id="btnThemeToggle" class="btn btn-icon" title="Alternar tema">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+            </button>
+            <button id="btnShortcuts" class="btn btn-icon btn-shortcuts" title="Atalhos (Ctrl+/)">
+                <span>?</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Editor Panel -->
+        <div class="editor-panel">
+            <div class="editor-tabs nvim-tabline">
+                <div class="nvim-tab-left">
+                    <span class="nvim-mode" id="nvimMode">NORMAL</span>
+                </div>
+                <div class="file-tabs" id="fileTabs">
+                    <div class="tab active" data-file="html">
+                        <span class="tab-dot tab-dot-html"></span>
+                        <span>index.html</span>
+                    </div>
+                    <div class="tab" data-file="css">
+                        <span class="tab-dot tab-dot-css"></span>
+                        <span>style.css</span>
+                    </div>
+                    <div class="tab" data-file="js">
+                        <span class="tab-dot tab-dot-js"></span>
+                        <span>script.js</span>
+                    </div>
+                </div>
+                <div class="nvim-tab-right">                    <button id="btnExpandEditor" class="btn btn-icon btn-expand" title="Expandir editor (Ctrl+Shift+E)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                    </button>                    <span class="nvim-branch">  main</span>
+                </div>
+            </div>
+            <div id="editorContainer" class="editor-container"></div>
+            <div class="nvim-statusline" id="nvimStatusline">
+                <div class="nvim-status-left">
+                    <span class="nvim-status-mode" id="nvimStatusMode">NORMAL</span>
+                    <span class="nvim-status-file" id="nvimStatusFile">index.html</span>
+                    <span class="nvim-status-encoding">utf-8</span>
+                </div>
+                <div class="nvim-status-right">
+                    <span class="nvim-status-filetype" id="nvimStatusLang">html</span>
+                    <span class="nvim-status-position" id="nvimStatusPos">Ln 1, Col 1</span>
+                    <span class="nvim-status-percent" id="nvimStatusPercent">Top</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resize Handle -->
+        <div class="resize-handle" id="resizeHandle" title="Arrastar para redimensionar"></div>
+
+        <!-- Right Panel: Preview + Console -->
+        <div class="right-panel" id="rightPanel">
+            <!-- Panel Switcher -->
+            <div class="panel-switcher">
+                <button class="panel-tab active" id="btnPreviewTab" data-panel="preview">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    Preview
+                </button>
+                <button class="panel-tab" id="btnConsoleTab" data-panel="console">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                    Console
+                </button>
+                <div class="panel-tab-actions">
+                    <button id="btnExpandPanel" class="btn btn-icon btn-sm btn-expand" title="Expandir painel (Ctrl+Shift+B)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                    </button>
+                    <button id="btnRefreshPreview" class="btn btn-icon btn-sm" title="Atualizar preview">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </button>
+                    <button id="btnClearConsole" class="btn btn-icon btn-sm" title="Limpar console">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preview iframe -->
+            <div class="preview-panel" id="previewPanel">
+                <iframe id="previewFrame" class="preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
+            </div>
+
+            <!-- Console -->
+            <div class="console-panel hidden" id="consolePanel">
+                <div id="consoleOutput" class="console-output">
+                    <div class="console-welcome">// Console output</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Control Bar -->
+    <footer class="control-bar">
+        <div class="controls-left">
+            <!-- Recording controls -->
+            <button id="btnRecord" class="btn btn-record" title="Iniciar gravação">
+                <span class="record-dot"></span>
+                Gravar
+            </button>
+            <button id="btnStopRecord" class="btn btn-stop hidden" title="Parar gravação">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                </svg>
+                Parar
+            </button>
+
+            <div class="divider"></div>
+
+            <!-- Playback controls -->
+            <button id="btnPlay" class="btn btn-play hidden" title="Reproduzir (Espaço)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+            </button>
+            <button id="btnPause" class="btn btn-pause hidden" title="Pausar (Espaço)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="4" width="4" height="16"></rect>
+                    <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+            </button>
+            <button id="btnRestart" class="btn hidden" title="Reiniciar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+            </button>
+        </div>
+
+        <div class="controls-center">
+            <!-- Timeline -->
+            <div id="timelineContainer" class="timeline-container hidden">
+                <span id="currentTime" class="time-display">00:00</span>
+                <div class="timeline-track" id="timelineTrack">
+                    <div class="timeline-progress" id="timelineProgress"></div>
+                    <div class="timeline-thumb" id="timelineThumb"></div>
+                    <div class="timeline-events" id="timelineEvents"></div>
+                </div>
+                <span id="totalTime" class="time-display">00:00</span>
+            </div>
+            <!-- Status -->
+            <div id="statusMessage" class="status-message">
+                Pronto para gravar
+            </div>
+        </div>
+
+        <div class="controls-right">
+            <!-- Speed control -->
+            <div id="speedControl" class="speed-control hidden">
+                <label>Velocidade:</label>
+                <select id="playbackSpeed">
+                    <option value="0.25">0.25x</option>
+                    <option value="0.5">0.5x</option>
+                    <option value="0.75">0.75x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2">2x</option>
+                    <option value="3">3x</option>
+                </select>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Save/Load -->
+            <button id="btnSave" class="btn hidden" title="Salvar gravação">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+                Salvar
+            </button>
+            <button id="btnLoad" class="btn" title="Carregar gravação">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Carregar
+            </button>
+            <input type="file" id="fileInput" accept=".codecast,.json" class="hidden">
+
+            <!-- Audio toggle -->
+            <button id="btnMicToggle" class="btn btn-icon hidden" title="Ativar/desativar microfone">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+            </button>
+        </div>
+    </footer>
+
+    <!-- Pause feedback bar (non-blocking, inside control bar area) -->
+    <div id="pauseBar" class="pause-bar hidden">
+        <div class="pause-bar-left">
+            <span class="pause-bar-indicator"></span>
+            <span class="pause-bar-text">PAUSADO — Edite o código à vontade</span>
+        </div>
+        <div class="pause-bar-right">
+            <button id="btnResetCode" class="btn btn-sm pause-bar-btn">Restaurar original</button>
+            <button id="btnResume" class="btn btn-sm pause-bar-btn primary">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                Continuar
+            </button>
+        </div>
+    </div>
+
+    <!-- Shortcuts Modal -->
+    <div id="shortcutsOverlay" class="shortcuts-overlay hidden">
+        <div class="shortcuts-modal">
+            <div class="shortcuts-header">
+                <h3>Atalhos do Teclado</h3>
+                <button id="btnCloseShortcuts" class="btn btn-icon btn-sm" title="Fechar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="shortcuts-body">
+                <div class="shortcuts-group">
+                    <h4>Abas de Arquivos</h4>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>1</kbd><span>index.html</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>2</kbd><span>style.css</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>3</kbd><span>script.js</span></div>
+                </div>
+                <div class="shortcuts-group">
+                    <h4>Painéis</h4>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd><span>Preview</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd><span>Console</span></div>
+                </div>
+                <div class="shortcuts-group">
+                    <h4>Gravação e Reprodução</h4>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd><span>Gravar / Parar</span></div>
+                    <div class="shortcut-row"><kbd>Espaço</kbd><span>Play / Pausar</span></div>
+                    <div class="shortcut-row"><kbd>Esc</kbd><span>Continuar reprodução</span></div>
+                </div>
+                <div class="shortcuts-group">
+                    <h4>Layout</h4>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd><span>Expandir editor</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd><span>Expandir browser/console</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd><span>Restaurar layout</span></div>
+                </div>
+                <div class="shortcuts-group">
+                    <h4>Editor</h4>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>Enter</kbd><span>Atualizar preview</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>S</kbd><span>Salvar / Atualizar</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>/</kbd><span>Mostrar atalhos</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Monaco Editor from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <script src="js/recorder.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
