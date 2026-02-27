@@ -158,6 +158,14 @@
         btnCancelSection: $('#btnCancelSection'),
         btnConfirmSection: $('#btnConfirmSection'),
 
+        // Library
+        btnLibrary: $('#btnLibrary'),
+        libraryOverlay: $('#libraryOverlay'),
+        btnCloseLibrary: $('#btnCloseLibrary'),
+        btnRefreshLibrary: $('#btnRefreshLibrary'),
+        libraryList: $('#libraryList'),
+        libraryCount: $('#libraryCount'),
+
         // Exercise pause bar
         exercisePauseBar: $('#exercisePauseBar'),
         exercisePauseTitle: $('#exercisePauseTitle'),
@@ -711,6 +719,14 @@
         elements.teTrimAfter.addEventListener('click', trimAfter);
         elements.teAdjustTimes.addEventListener('click', adjustTimes);
         elements.teApply.addEventListener('click', applyTimelineEdits);
+
+        // Library
+        elements.btnLibrary.addEventListener('click', openLibrary);
+        elements.btnCloseLibrary.addEventListener('click', closeLibrary);
+        elements.btnRefreshLibrary.addEventListener('click', function() { loadLibraryList(); });
+        elements.libraryOverlay.addEventListener('click', function(e) {
+            if (e.target === elements.libraryOverlay) closeLibrary();
+        });
 
         // Sessions sidebar
         elements.btnToggleSidebar.addEventListener('click', toggleSidebar);
@@ -1287,6 +1303,167 @@
     }
 
     // ==========================================
+    // Library (recordings folder)
+    // ==========================================
+    function openLibrary() {
+        elements.libraryOverlay.classList.remove('hidden');
+        loadLibraryList();
+    }
+
+    function closeLibrary() {
+        elements.libraryOverlay.classList.add('hidden');
+    }
+
+    function loadLibraryList() {
+        elements.libraryList.innerHTML = '<div class="library-empty">Carregando...</div>';
+        elements.libraryCount.textContent = '';
+
+        fetch('recordings/manifest.json?t=' + Date.now())
+            .then(function(res) {
+                if (!res.ok) throw new Error('Manifest n\u00e3o encontrado. Execute scan-recordings.ps1');
+                return res.json();
+            })
+            .then(function(manifest) {
+                renderLibraryList(manifest);
+            })
+            .catch(function(err) {
+                elements.libraryList.innerHTML = '<div class="library-empty">'
+                    + '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;margin-bottom:8px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+                    + '<br>' + err.message + '</div>';
+            });
+    }
+
+    function renderLibraryList(manifest) {
+        var list = elements.libraryList;
+        list.innerHTML = '';
+
+        if (!manifest.recordings || manifest.recordings.length === 0) {
+            list.innerHTML = '<div class="library-empty">'
+                + 'Nenhuma grava\u00e7\u00e3o encontrada.<br>'
+                + '<span style="font-size:11px;opacity:0.6">Adicione .codecast na pasta recordings/</span></div>';
+            elements.libraryCount.textContent = '0 grava\u00e7\u00f5es';
+            return;
+        }
+
+        elements.libraryCount.textContent = manifest.recordings.length + ' grava\u00e7\u00e3o' + (manifest.recordings.length > 1 ? '\u00f5es' : '');
+
+        manifest.recordings.forEach(function(rec) {
+            var card = document.createElement('div');
+            card.className = 'library-card';
+
+            var durSec = Math.floor((rec.duration || 0) / 1000);
+            var durMin = Math.floor(durSec / 60);
+            var durSecR = durSec % 60;
+            var durStr = String(durMin).padStart(2, '0') + ':' + String(durSecR).padStart(2, '0');
+
+            var sizeStr = '';
+            if (rec.size) {
+                if (rec.size > 1024 * 1024) sizeStr = (rec.size / (1024 * 1024)).toFixed(1) + ' MB';
+                else sizeStr = Math.round(rec.size / 1024) + ' KB';
+            }
+
+            var sectionsHtml = '';
+            if (rec.sections && rec.sections.length > 0) {
+                sectionsHtml = '<div class="library-card-sections">';
+                rec.sections.forEach(function(s) {
+                    var icon = s.isExercise ? '\ud83c\udfcb\ufe0f' : '\ud83d\udccc';
+                    sectionsHtml += '<span class="library-section-tag' + (s.isExercise ? ' exercise' : '') + '">' + icon + ' ' + s.title + '</span>';
+                });
+                sectionsHtml += '</div>';
+            }
+
+            card.innerHTML = '<div class="library-card-info">'
+                + '<div class="library-card-title">' + (rec.title || rec.filename) + '</div>'
+                + '<div class="library-card-meta">'
+                + '<span class="library-meta-item">\u23f1 ' + durStr + '</span>'
+                + '<span class="library-meta-item">\ud83d\udcca ' + (rec.events || 0) + ' eventos</span>'
+                + (sizeStr ? '<span class="library-meta-item">\ud83d\udcbe ' + sizeStr + '</span>' : '')
+                + '</div>' + sectionsHtml + '</div>'
+                + '<button class="btn btn-sm library-card-play" title="Abrir grava\u00e7\u00e3o">'
+                + '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>'
+                + ' Abrir</button>';
+
+            card.querySelector('.library-card-play').addEventListener('click', function() {
+                loadFromLibrary(rec.filename, rec.title);
+            });
+
+            list.appendChild(card);
+        });
+    }
+
+    function loadFromLibrary(filename, title) {
+        closeLibrary();
+        showToast('Carregando "' + title + '"...', 'info');
+
+        fetch('recordings/' + encodeURIComponent(filename) + '?t=' + Date.now())
+            .then(function(res) {
+                if (!res.ok) throw new Error('Arquivo n\u00e3o encontrado');
+                return res.json();
+            })
+            .then(function(recording) {
+                if (!recording.events || !recording.duration) throw new Error('Formato inv\u00e1lido');
+                applyLoadedRecording(recording);
+            })
+            .catch(function(err) {
+                showToast('Erro ao carregar: ' + err.message, 'error');
+            });
+    }
+
+    function applyLoadedRecording(recording) {
+        if (appMode === 'playing' || appMode === 'paused') {
+            player.stop();
+            editor.updateOptions({ readOnly: false });
+            isIgnoringChanges = false;
+        }
+
+        currentRecording = recording;
+        elements.lessonTitle.value = recording.title || 'Aula Carregada';
+
+        if (recording.multiFile) {
+            var initEvt = recording.events[0];
+            var fileData = initEvt.files || recording.files || {};
+            Object.keys(fileData).forEach(function(key) {
+                if (files[key] && files[key].model) {
+                    files[key].model.setValue(fileData[key]);
+                    files[key].content = fileData[key];
+                }
+            });
+            switchToFile('html');
+        } else {
+            var initEvent = recording.events[0];
+            if (initEvent && initEvent.type === 'init') {
+                editor.setValue(initEvent.content || '');
+            }
+        }
+
+        updatePreview(false);
+        clearConsole();
+
+        appMode = 'idle';
+        elements.btnPlay.classList.remove('hidden');
+        elements.btnRestart.classList.remove('hidden');
+        elements.btnSave.classList.remove('hidden');
+        elements.btnNew.classList.remove('hidden');
+        elements.btnEditRecording.classList.remove('hidden');
+        elements.btnContinueRecord.classList.remove('hidden');
+        elements.speedControl.classList.remove('hidden');
+        elements.timelineContainer.classList.remove('hidden');
+        elements.pauseBar.classList.add('hidden');
+        elements.exercisePauseBar.classList.add('hidden');
+        elements.totalTime.textContent = formatTime(recording.duration);
+        elements.currentTime.textContent = '00:00';
+        elements.statusMessage.textContent = 'Grava\u00e7\u00e3o carregada! Clique em Play.';
+        elements.statusMessage.className = 'status-message';
+
+        renderTimelineMarkers();
+        updateTimeline(0, 0);
+        currentSectionIndex = -1;
+        renderSidebarSections();
+
+        showToast('"' + recording.title + '" carregada! Dura\u00e7\u00e3o: ' + formatTime(recording.duration), 'success');
+    }
+
+    // ==========================================
     // Save & Load
     // ==========================================
     function saveRecording() {
@@ -1321,56 +1498,10 @@
         reader.onload = function(event) {
             try {
                 var recording = JSON.parse(event.target.result);
-
                 if (!recording.events || !recording.duration) {
                     throw new Error('Formato inv\u00e1lido');
                 }
-
-                currentRecording = recording;
-                elements.lessonTitle.value = recording.title || 'Aula Carregada';
-
-                // Load multi-file content
-                if (recording.multiFile) {
-                    var initEvt = recording.events[0];
-                    var fileData = initEvt.files || recording.files || {};
-                    Object.keys(fileData).forEach(function(key) {
-                        if (files[key] && files[key].model) {
-                            files[key].model.setValue(fileData[key]);
-                            files[key].content = fileData[key];
-                        }
-                    });
-                    switchToFile('html');
-                } else {
-                    // Legacy single-file
-                    var initEvent = recording.events[0];
-                    if (initEvent && initEvent.type === 'init') {
-                        editor.setValue(initEvent.content || '');
-                    }
-                }
-
-                updatePreview(false);
-
-                elements.btnPlay.classList.remove('hidden');
-                elements.btnRestart.classList.remove('hidden');
-                elements.btnSave.classList.remove('hidden');
-                elements.btnNew.classList.remove('hidden');
-                elements.btnEditRecording.classList.remove('hidden');
-                elements.btnContinueRecord.classList.remove('hidden');
-                elements.speedControl.classList.remove('hidden');
-                elements.timelineContainer.classList.remove('hidden');
-                elements.totalTime.textContent = formatTime(recording.duration);
-                elements.currentTime.textContent = '00:00';
-                elements.statusMessage.textContent = 'Grava\u00e7\u00e3o carregada! Clique em Play.';
-                elements.statusMessage.className = 'status-message';
-
-                renderTimelineMarkers();
-                updateTimeline(0, 0);
-
-                // Render sidebar sections if the recording has them
-                currentSectionIndex = -1;
-                renderSidebarSections();
-
-                showToast('"' + recording.title + '" carregada! Dura\u00e7\u00e3o: ' + formatTime(recording.duration), 'success');
+                applyLoadedRecording(recording);
             } catch (err) {
                 showToast('Erro ao carregar arquivo: ' + err.message, 'error');
             }
