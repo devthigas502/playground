@@ -71,9 +71,10 @@
         speedControl: $('#speedControl'),
         playbackSpeed: $('#playbackSpeed'),
 
-        // Save/Load
+        // Save/Load/New
         btnSave: $('#btnSave'),
         btnLoad: $('#btnLoad'),
+        btnNew: $('#btnNew'),
         fileInput: $('#fileInput'),
 
         // Audio
@@ -676,10 +677,11 @@
             player.setSpeed(parseFloat(e.target.value));
         });
 
-        // Save/Load
+        // Save/Load/New
         elements.btnSave.addEventListener('click', saveRecording);
         elements.btnLoad.addEventListener('click', function() { elements.fileInput.click(); });
         elements.fileInput.addEventListener('change', loadRecording);
+        elements.btnNew.addEventListener('click', newRecording);
 
         // Theme toggle
         elements.btnThemeToggle.addEventListener('click', toggleTheme);
@@ -775,6 +777,7 @@
         elements.btnPause.classList.add('hidden');
         elements.btnRestart.classList.add('hidden');
         elements.btnSave.classList.add('hidden');
+        elements.btnNew.classList.add('hidden');
         elements.btnEditRecording.classList.add('hidden');
         elements.timelineContainer.classList.add('hidden');
         elements.speedControl.classList.add('hidden');
@@ -843,6 +846,7 @@
         elements.btnPause.classList.add('hidden');
         elements.btnRestart.classList.add('hidden');
         elements.btnSave.classList.add('hidden');
+        elements.btnNew.classList.add('hidden');
         elements.btnEditRecording.classList.add('hidden');
         elements.timelineContainer.classList.add('hidden');
         elements.speedControl.classList.add('hidden');
@@ -946,6 +950,7 @@
         elements.btnPlay.classList.remove('hidden');
         elements.btnRestart.classList.remove('hidden');
         elements.btnSave.classList.remove('hidden');
+        elements.btnNew.classList.remove('hidden');
         elements.btnEditRecording.classList.remove('hidden');
         elements.speedControl.classList.remove('hidden');
         elements.timelineContainer.classList.remove('hidden');
@@ -1042,6 +1047,7 @@
         elements.btnPause.classList.remove('hidden');
         elements.btnRecord.classList.add('hidden');
         elements.btnContinueRecord.classList.add('hidden');
+        elements.btnNew.classList.add('hidden');
         elements.timelineContainer.classList.remove('hidden');
         elements.statusMessage.textContent = '\u25b6 Reproduzindo...';
         elements.statusMessage.className = 'status-message playing';
@@ -1108,6 +1114,7 @@
         elements.exercisePauseBar.classList.add('hidden');
         elements.btnRecord.classList.remove('hidden');
         elements.btnContinueRecord.classList.remove('hidden');
+        elements.btnNew.classList.remove('hidden');
         elements.currentTime.textContent = '00:00';
         updateTimeline(0, 0);
         elements.statusMessage.textContent = 'Pronto para reproduzir';
@@ -1130,6 +1137,7 @@
         elements.exercisePauseBar.classList.add('hidden');
         elements.btnRecord.classList.remove('hidden');
         elements.btnContinueRecord.classList.remove('hidden');
+        elements.btnNew.classList.remove('hidden');
         elements.statusMessage.textContent = 'Reprodu\u00e7\u00e3o finalizada. Edite o c\u00f3digo!';
         elements.statusMessage.className = 'status-message';
 
@@ -1221,6 +1229,64 @@
     }
 
     // ==========================================
+    // New Recording (discard current)
+    // ==========================================
+    function newRecording() {
+        if (appMode === 'recording') return;
+
+        // Stop playback if active
+        if (appMode === 'playing' || appMode === 'paused') {
+            player.stop();
+            editor.updateOptions({ readOnly: false });
+            isIgnoringChanges = false;
+        }
+
+        // Discard current recording
+        currentRecording = null;
+
+        // Reset files to default content
+        Object.keys(defaultContents).forEach(function(key) {
+            if (files[key] && files[key].model) {
+                files[key].model.setValue(defaultContents[key]);
+                files[key].content = defaultContents[key];
+            }
+        });
+        switchToFile('html');
+        clearConsole();
+        updatePreview(false);
+
+        // Reset UI
+        appMode = 'idle';
+        elements.btnRecord.classList.remove('recording', 'hidden');
+        elements.btnContinueRecord.classList.add('hidden');
+        elements.btnStopRecord.classList.add('hidden');
+        elements.btnAddSection.classList.add('hidden');
+        elements.btnAddExercise.classList.add('hidden');
+        elements.btnPlay.classList.add('hidden');
+        elements.btnPause.classList.add('hidden');
+        elements.btnRestart.classList.add('hidden');
+        elements.btnSave.classList.add('hidden');
+        elements.btnNew.classList.add('hidden');
+        elements.btnEditRecording.classList.add('hidden');
+        elements.pauseBar.classList.add('hidden');
+        elements.exercisePauseBar.classList.add('hidden');
+        elements.timelineContainer.classList.add('hidden');
+        elements.speedControl.classList.add('hidden');
+        elements.currentTime.textContent = '00:00';
+        elements.totalTime.textContent = '00:00';
+        updateTimeline(0, 0);
+        elements.statusMessage.textContent = 'Pronto para gravar';
+        elements.statusMessage.className = 'status-message';
+        elements.lessonTitle.value = 'Minha Aula';
+
+        // Reset sidebar
+        currentSectionIndex = -1;
+        renderSidebarSections();
+
+        showToast('Grava\u00e7\u00e3o descartada. Pronto para uma nova!', 'info');
+    }
+
+    // ==========================================
     // Save & Load
     // ==========================================
     function saveRecording() {
@@ -1287,6 +1353,7 @@
                 elements.btnPlay.classList.remove('hidden');
                 elements.btnRestart.classList.remove('hidden');
                 elements.btnSave.classList.remove('hidden');
+                elements.btnNew.classList.remove('hidden');
                 elements.btnEditRecording.classList.remove('hidden');
                 elements.btnContinueRecord.classList.remove('hidden');
                 elements.speedControl.classList.remove('hidden');
