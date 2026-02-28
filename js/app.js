@@ -1700,6 +1700,7 @@
             document.body.style.cursor = 'col-resize';
             document.body.style.userSelect = 'none';
             handle.classList.add('active');
+            elements.previewFrame.style.pointerEvents = 'none'
             e.preventDefault();
         });
 
@@ -1718,7 +1719,7 @@
 
             // Subtract handle width
             var handleW = handle.offsetWidth;
-            elements.editorPanel.style.flex = '0 0 ' + (newEditorW - handleW / 2) + 'px';
+            elements.editorPanel.style.flex = '1 0  ' + (newEditorW - handleW / 2) + 'px';
             elements.rightPanel.style.width = (newPanelW - handleW / 2) + 'px';
 
             if (editor) editor.layout();
@@ -1730,6 +1731,8 @@
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
             handle.classList.remove('active');
+            elements.previewFrame.style.pointerEvents = ''
+
         });
     }
 
