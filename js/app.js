@@ -11,28 +11,33 @@
     let editor = null;
     let recorder = new CodeCastRecorder();
     let player = new CodeCastPlayer();
+    let pythonRunner = new PythonRunner();
     let currentRecording = null;
     let appMode = 'idle'; // idle, recording, playing, paused
     let isIgnoringChanges = false;
     let autoPreview = true;
     let previewDebounceTimer = null;
+    let currentEnvironment = null; // 'web' | 'python'  — set by env picker
+    let pyodideLoaded = false;
 
     // Sessions/Sections state
     let sectionPromptIsExercise = false; // used when opening section prompt
     let currentSectionIndex = -1;        // current section index during playback
 
     // Multi-file state
-    let activeFile = 'html'; // html | css | js
+    let activeFile = 'html'; // html | css | js | python
     const files = {
-        html: { model: null, state: null, content: '' },
-        css:  { model: null, state: null, content: '' },
-        js:   { model: null, state: null, content: '' }
+        html:   { model: null, state: null, content: '' },
+        css:    { model: null, state: null, content: '' },
+        js:     { model: null, state: null, content: '' },
+        python: { model: null, state: null, content: '' }
     };
 
     const fileConfig = {
-        html: { name: 'index.html', language: 'html' },
-        css:  { name: 'style.css',  language: 'css' },
-        js:   { name: 'script.js',  language: 'javascript' }
+        html:   { name: 'index.html', language: 'html' },
+        css:    { name: 'style.css',  language: 'css' },
+        js:     { name: 'script.js',  language: 'javascript' },
+        python: { name: 'main.py',    language: 'python' }
     };
 
     // ==========================================
@@ -114,6 +119,15 @@
         consoleOutput: $('#consoleOutput'),
         btnClearConsole: $('#btnClearConsole'),
 
+        // Python panel
+        btnPythonTab: $('#btnPythonTab'),
+        pythonPanel: $('#pythonPanel'),
+        pythonOutput: $('#pythonOutput'),
+        pythonStatus: $('#pythonStatus'),
+        btnRunPython: $('#btnRunPython'),
+        btnClearPython: $('#btnClearPython'),
+        btnResetPython: $('#btnResetPython'),
+
         // Neovim UI
         nvimMode: $('#nvimMode'),
         nvimStatusMode: $('#nvimStatusMode'),
@@ -170,7 +184,19 @@
         exercisePauseBar: $('#exercisePauseBar'),
         exercisePauseTitle: $('#exercisePauseTitle'),
         exercisePauseDesc: $('#exercisePauseDesc'),
-        btnSeeAnswer: $('#btnSeeAnswer')
+        btnSeeAnswer: $('#btnSeeAnswer'),
+
+        // Environment picker
+        envPickerOverlay: $('#envPickerOverlay'),
+        envCardWeb: $('#envCardWeb'),
+        envCardPython: $('#envCardPython'),
+        btnSwitchEnv: $('#btnSwitchEnv'),
+
+        // Import/Export
+        btnImportFile: $('#btnImportFile'),
+        btnExportFile: $('#btnExportFile'),
+        btnExportAll: $('#btnExportAll'),
+        importFileInput: $('#importFileInput')
     };
 
     // ==========================================
@@ -181,7 +207,9 @@
 
         css: '',
 
-        js: ''
+        js: '',
+
+        python: ''
     };
 
     // ==========================================
@@ -276,15 +304,18 @@
             files.html.model = monaco.editor.createModel(defaultContents.html, 'html');
             files.css.model  = monaco.editor.createModel(defaultContents.css, 'css');
             files.js.model   = monaco.editor.createModel(defaultContents.js, 'javascript');
+            files.python.model = monaco.editor.createModel(defaultContents.python, 'python');
 
             // Store initial content
             files.html.content = defaultContents.html;
             files.css.content  = defaultContents.css;
             files.js.content   = defaultContents.js;
+            files.python.content = defaultContents.python;
 
-            // Create editor with HTML model initially
+            // Create editor with the active file's model initially
+            var initialModel = files[activeFile].model;
             editor = monaco.editor.create(elements.editorContainer, {
-                model: files.html.model,
+                model: initialModel,
                 theme: 'codecast-dark',
                 fontSize: 14,
                 fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
@@ -342,15 +373,26 @@
 
             // Keyboard shortcuts
             editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function() {
-                clearConsole();
-                updatePreview(true);
+                if (activeFile === 'python') {
+                    runPythonCode();
+                } else {
+                    clearConsole();
+                    updatePreview(true);
+                }
             });
 
             // Neovim statusline updates
             setupNvimStatusline(editor);
 
-            // Initial preview
-            setTimeout(function() { updatePreview(true); }, 500);
+            // Update statusline for initial file
+            var initCfg = fileConfig[activeFile];
+            elements.nvimStatusFile.textContent = initCfg.name;
+            elements.nvimStatusLang.textContent = initCfg.language;
+
+            // Initial preview (only for web env)
+            if (currentEnvironment === 'web') {
+                setTimeout(function() { updatePreview(true); }, 500);
+            }
 
             // Setup complete
             showToast('Editor carregado com sucesso!', 'success');
@@ -363,6 +405,9 @@
     // ==========================================
     function switchToFile(fileKey) {
         if (fileKey === activeFile) return;
+
+        // Track previous file for panel switching
+        var previousFile = activeFile;
 
         // Save current editor state (scroll position, cursor, etc.)
         files[activeFile].state = editor.saveViewState();
@@ -396,6 +441,13 @@
             });
         }
 
+        // Auto-switch right panel when switching to/from Python
+        if (fileKey === 'python') {
+            switchPanel('python');
+        } else if (previousFile === 'python') {
+            switchPanel('preview');
+        }
+
         // Focus editor
         editor.focus();
     }
@@ -404,6 +456,7 @@
     // Live Preview
     // ==========================================
     function schedulePreviewUpdate() {
+        if (currentEnvironment === 'python') return; // No auto-preview in Python env
         if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
         previewDebounceTimer = setTimeout(function() { updatePreview(false); }, 400);
     }
@@ -591,6 +644,102 @@
     }
 
     // ==========================================
+    // Panel Switching (Preview / Console / Python)
+    // ==========================================
+    function switchPanel(panel) {
+        elements.btnPreviewTab.classList.toggle('active', panel === 'preview');
+        elements.btnConsoleTab.classList.toggle('active', panel === 'console');
+        elements.btnPythonTab.classList.toggle('active', panel === 'python');
+        elements.previewPanel.classList.toggle('hidden', panel !== 'preview');
+        elements.consolePanel.classList.toggle('hidden', panel !== 'console');
+        elements.pythonPanel.classList.toggle('hidden', panel !== 'python');
+    }
+
+    // ==========================================
+    // Python Execution
+    // ==========================================
+    async function runPythonCode() {
+        var code = files.python.content;
+        if (!code.trim()) {
+            showToast('Nenhum código Python para executar.', 'info');
+            return;
+        }
+
+        // Switch to Python output panel
+        switchPanel('python');
+
+        // Load Pyodide if not ready
+        if (!pythonRunner.isReady()) {
+            elements.pythonStatus.textContent = '⏳ Carregando Python...';
+            elements.pythonStatus.className = 'python-status loading';
+            try {
+                await pythonRunner.load();
+            } catch (err) {
+                elements.pythonStatus.textContent = '❌ Erro ao carregar';
+                elements.pythonStatus.className = 'python-status error';
+                appendPythonOutput('Erro ao carregar o interpretador Python: ' + err.message, 'error');
+                return;
+            }
+        }
+
+        // Show running state
+        elements.pythonStatus.textContent = '▶ Executando...';
+        elements.pythonStatus.className = 'python-status running';
+        elements.btnRunPython.disabled = true;
+
+        // Add input indicator
+        appendPythonOutput('>>> Executando main.py...', 'info');
+
+        try {
+            var result = await pythonRunner.run(code);
+
+            if (result.output) {
+                appendPythonOutput(result.output, 'stdout');
+            }
+            if (result.error) {
+                appendPythonOutput(result.error, 'stderr');
+            }
+            if (result.success && !result.output && !result.error) {
+                appendPythonOutput('(sem saída)', 'info');
+            }
+
+            elements.pythonStatus.textContent = result.success ? '✓ Concluído' : '✗ Erro';
+            elements.pythonStatus.className = 'python-status ' + (result.success ? 'success' : 'error');
+        } catch (err) {
+            appendPythonOutput('Erro: ' + err.message, 'stderr');
+            elements.pythonStatus.textContent = '✗ Erro';
+            elements.pythonStatus.className = 'python-status error';
+        }
+
+        elements.btnRunPython.disabled = false;
+    }
+
+    function appendPythonOutput(text, type) {
+        type = type || 'stdout';
+        var line = document.createElement('div');
+        line.className = 'python-line ' + type;
+        line.textContent = text;
+        elements.pythonOutput.appendChild(line);
+        elements.pythonOutput.scrollTop = elements.pythonOutput.scrollHeight;
+    }
+
+    function clearPythonOutput() {
+        elements.pythonOutput.innerHTML = '';
+    }
+
+    async function resetPythonEnv() {
+        if (pythonRunner.isReady()) {
+            await pythonRunner.reset();
+            clearPythonOutput();
+            elements.pythonStatus.textContent = '✓ Ambiente reiniciado';
+            elements.pythonStatus.className = 'python-status success';
+            showToast('Ambiente Python reiniciado.', 'success');
+        } else {
+            showToast('Python ainda não foi carregado.', 'info');
+        }
+    }
+
+    // ==========================================
     // Neovim Statusline
     // ==========================================
     function setupNvimStatusline(ed) {
@@ -641,20 +790,23 @@
             });
         });
 
-        // Panel switcher (Preview / Console)
+        // Panel switcher (Preview / Console / Python)
         elements.btnPreviewTab.addEventListener('click', function() {
-            elements.btnPreviewTab.classList.add('active');
-            elements.btnConsoleTab.classList.remove('active');
-            elements.previewPanel.classList.remove('hidden');
-            elements.consolePanel.classList.add('hidden');
+            switchPanel('preview');
         });
 
         elements.btnConsoleTab.addEventListener('click', function() {
-            elements.btnConsoleTab.classList.add('active');
-            elements.btnPreviewTab.classList.remove('active');
-            elements.consolePanel.classList.remove('hidden');
-            elements.previewPanel.classList.add('hidden');
+            switchPanel('console');
         });
+
+        elements.btnPythonTab.addEventListener('click', function() {
+            switchPanel('python');
+        });
+
+        // Python controls
+        elements.btnRunPython.addEventListener('click', function() { runPythonCode(); });
+        elements.btnClearPython.addEventListener('click', function() { clearPythonOutput(); });
+        elements.btnResetPython.addEventListener('click', function() { resetPythonEnv(); });
 
         // Refresh preview
         elements.btnRefreshPreview.addEventListener('click', function() { clearConsole(); updatePreview(true); });
@@ -727,6 +879,22 @@
         elements.libraryOverlay.addEventListener('click', function(e) {
             if (e.target === elements.libraryOverlay) closeLibrary();
         });
+
+        // Switch environment
+        elements.btnSwitchEnv.addEventListener('click', switchEnvironment);
+
+        // Import/Export
+        elements.btnImportFile.addEventListener('click', function() {
+            elements.importFileInput.click();
+        });
+        elements.importFileInput.addEventListener('change', function(e) {
+            if (e.target.files && e.target.files.length > 0) {
+                importFile(e.target.files[0]);
+                e.target.value = ''; // reset so same file can be re-imported
+            }
+        });
+        elements.btnExportFile.addEventListener('click', exportCurrentFile);
+        elements.btnExportAll.addEventListener('click', exportAllFiles);
 
         // Sessions sidebar
         elements.btnToggleSidebar.addEventListener('click', toggleSidebar);
@@ -802,7 +970,7 @@
 
         // Start the recorder (records events on active editor model)
         await recorder.startRecording(editor, {
-            language: 'html',
+            language: currentEnvironment === 'python' ? 'python' : 'html',
             title: elements.lessonTitle.value,
             audioEnabled: false
         });
@@ -810,11 +978,18 @@
         // Also inject initial multi-file state into events
         recorder.events[0].multiFile = true;
         recorder.events[0].activeFile = activeFile;
-        recorder.events[0].files = {
-            html: files.html.content,
-            css: files.css.content,
-            js: files.js.content
-        };
+        recorder.events[0].environment = currentEnvironment;
+        if (currentEnvironment === 'python') {
+            recorder.events[0].files = {
+                python: files.python.content
+            };
+        } else {
+            recorder.events[0].files = {
+                html: files.html.content,
+                css: files.css.content,
+                js: files.js.content
+            };
+        }
 
         // Dispose recorder's own content listener to avoid duplicate events
         // setupMultiFileRecording handles content tracking per-file
@@ -871,7 +1046,7 @@
 
         // Start recorder normally (creates fresh init + listeners)
         await recorder.startRecording(editor, {
-            language: 'html',
+            language: currentEnvironment === 'python' ? 'python' : 'html',
             title: elements.lessonTitle.value,
             audioEnabled: false
         });
@@ -1267,9 +1442,17 @@
                 files[key].content = defaultContents[key];
             }
         });
-        switchToFile('html');
+
+        // Switch to correct initial file for current environment
+        if (currentEnvironment === 'python') {
+            switchToFile('python');
+        } else {
+            switchToFile('html');
+        }
         clearConsole();
-        updatePreview(false);
+        if (currentEnvironment === 'web') {
+            updatePreview(false);
+        }
 
         // Reset UI
         appMode = 'idle';
@@ -1557,11 +1740,15 @@
             }
         }
 
-        // Ctrl+1/2/3 to switch tabs
+        // Ctrl+1/2/3/4 to switch tabs (filtered by environment)
         if (e.ctrlKey && !e.shiftKey && !e.altKey) {
-            if (e.code === 'Digit1') { e.preventDefault(); switchToFile('html'); }
-            if (e.code === 'Digit2') { e.preventDefault(); switchToFile('css'); }
-            if (e.code === 'Digit3') { e.preventDefault(); switchToFile('js'); }
+            if (currentEnvironment === 'web') {
+                if (e.code === 'Digit1') { e.preventDefault(); switchToFile('html'); }
+                if (e.code === 'Digit2') { e.preventDefault(); switchToFile('css'); }
+                if (e.code === 'Digit3') { e.preventDefault(); switchToFile('js'); }
+            } else if (currentEnvironment === 'python') {
+                if (e.code === 'Digit1') { e.preventDefault(); switchToFile('python'); }
+            }
         }
 
         // Ctrl+Shift+P to switch to Preview
@@ -2234,6 +2421,235 @@
     }
 
     // ==========================================
+    // Import / Export Files
+    // ==========================================
+
+    // Map file extensions to internal file keys
+    var extensionToFileKey = {
+        '.html': 'html',
+        '.htm': 'html',
+        '.css': 'css',
+        '.js': 'js',
+        '.py': 'python',
+        '.txt': null // will try to detect or use current tab
+    };
+
+    function exportCurrentFile() {
+        var cfg = fileConfig[activeFile];
+        var content = files[activeFile].model
+            ? files[activeFile].model.getValue()
+            : files[activeFile].content;
+
+        if (!content || content.trim() === '') {
+            showToast('O arquivo está vazio', 'warning');
+            return;
+        }
+
+        var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        downloadBlob(blob, cfg.name);
+        showToast('Arquivo "' + cfg.name + '" exportado', 'success');
+    }
+
+    function exportAllFiles() {
+        var filesToExport = [];
+
+        if (currentEnvironment === 'python') {
+            // Python env: only main.py
+            var pyContent = files.python.model
+                ? files.python.model.getValue()
+                : files.python.content;
+            if (pyContent && pyContent.trim() !== '') {
+                filesToExport.push({ name: 'main.py', content: pyContent });
+            }
+        } else {
+            // Web env: html, css, js
+            ['html', 'css', 'js'].forEach(function(key) {
+                var c = files[key].model
+                    ? files[key].model.getValue()
+                    : files[key].content;
+                if (c && c.trim() !== '') {
+                    filesToExport.push({ name: fileConfig[key].name, content: c });
+                }
+            });
+        }
+
+        if (filesToExport.length === 0) {
+            showToast('Nenhum arquivo para exportar', 'warning');
+            return;
+        }
+
+        if (filesToExport.length === 1) {
+            // Only one file, download directly
+            var blob = new Blob([filesToExport[0].content], { type: 'text/plain;charset=utf-8' });
+            downloadBlob(blob, filesToExport[0].name);
+            showToast('Arquivo exportado', 'success');
+            return;
+        }
+
+        // Multiple files: create a simple ZIP
+        createSimpleZip(filesToExport).then(function(zipBlob) {
+            var projectName = elements.lessonTitle.value.trim() || 'projeto';
+            var safeName = projectName.replace(/[^a-zA-Z0-9_-]/g, '_');
+            downloadBlob(zipBlob, safeName + '.zip');
+            showToast(filesToExport.length + ' arquivos exportados como ZIP', 'success');
+        });
+    }
+
+    function downloadBlob(blob, filename) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function importFile(file) {
+        if (!file) return;
+
+        var ext = '.' + file.name.split('.').pop().toLowerCase();
+        var targetKey = extensionToFileKey[ext];
+
+        // For .txt, use current active file
+        if (targetKey === null || targetKey === undefined) {
+            targetKey = activeFile;
+        }
+
+        // Check if the target file belongs to current environment
+        if (currentEnvironment === 'python' && targetKey !== 'python') {
+            showToast('No ambiente Python, apenas arquivos .py são suportados', 'warning');
+            return;
+        }
+        if (currentEnvironment === 'web' && targetKey === 'python') {
+            showToast('No ambiente Web, arquivos .py não são suportados', 'warning');
+            return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var content = e.target.result;
+
+            // Switch to the target tab
+            if (targetKey !== activeFile) {
+                switchToFile(targetKey);
+            }
+
+            // Set content in editor
+            if (files[targetKey].model) {
+                files[targetKey].model.setValue(content);
+            }
+            files[targetKey].content = content;
+
+            showToast('Arquivo "' + file.name + '" importado para ' + fileConfig[targetKey].name, 'success');
+
+            // Update preview if in web env
+            if (currentEnvironment === 'web') {
+                schedulePreviewUpdate();
+            }
+        };
+        reader.onerror = function() {
+            showToast('Erro ao ler o arquivo', 'error');
+        };
+        reader.readAsText(file);
+    }
+
+    // Simple ZIP creator (no external library needed)
+    function createSimpleZip(fileList) {
+        return new Promise(function(resolve) {
+            var localFiles = [];
+            var centralDirectory = [];
+            var offset = 0;
+
+            fileList.forEach(function(f) {
+                var nameBytes = new TextEncoder().encode(f.name);
+                var contentBytes = new TextEncoder().encode(f.content);
+
+                // Local file header
+                var localHeader = new ArrayBuffer(30 + nameBytes.length);
+                var lhView = new DataView(localHeader);
+                lhView.setUint32(0, 0x04034b50, true); // signature
+                lhView.setUint16(4, 20, true); // version needed
+                lhView.setUint16(6, 0, true); // flags
+                lhView.setUint16(8, 0, true); // compression (none)
+                lhView.setUint16(10, 0, true); // mod time
+                lhView.setUint16(12, 0, true); // mod date
+                lhView.setUint32(14, crc32(contentBytes), true); // crc32
+                lhView.setUint32(18, contentBytes.length, true); // compressed size
+                lhView.setUint32(22, contentBytes.length, true); // uncompressed size
+                lhView.setUint16(26, nameBytes.length, true); // name length
+                lhView.setUint16(28, 0, true); // extra length
+                new Uint8Array(localHeader).set(nameBytes, 30);
+
+                // Central directory entry
+                var cdEntry = new ArrayBuffer(46 + nameBytes.length);
+                var cdView = new DataView(cdEntry);
+                cdView.setUint32(0, 0x02014b50, true); // signature
+                cdView.setUint16(4, 20, true); // version made by
+                cdView.setUint16(6, 20, true); // version needed
+                cdView.setUint16(8, 0, true); // flags
+                cdView.setUint16(10, 0, true); // compression
+                cdView.setUint16(12, 0, true); // mod time
+                cdView.setUint16(14, 0, true); // mod date
+                cdView.setUint32(16, crc32(contentBytes), true); // crc32
+                cdView.setUint32(20, contentBytes.length, true); // compressed
+                cdView.setUint32(24, contentBytes.length, true); // uncompressed
+                cdView.setUint16(28, nameBytes.length, true); // name length
+                cdView.setUint16(30, 0, true); // extra length
+                cdView.setUint16(32, 0, true); // comment length
+                cdView.setUint16(34, 0, true); // disk number
+                cdView.setUint16(36, 0, true); // internal attributes
+                cdView.setUint32(38, 0, true); // external attributes
+                cdView.setUint32(42, offset, true); // offset
+                new Uint8Array(cdEntry).set(nameBytes, 46);
+
+                localFiles.push(new Uint8Array(localHeader));
+                localFiles.push(contentBytes);
+                centralDirectory.push(new Uint8Array(cdEntry));
+
+                offset += localHeader.byteLength + contentBytes.length;
+            });
+
+            // End of central directory
+            var cdSize = centralDirectory.reduce(function(a, b) { return a + b.length; }, 0);
+            var eocd = new ArrayBuffer(22);
+            var eocdView = new DataView(eocd);
+            eocdView.setUint32(0, 0x06054b50, true); // signature
+            eocdView.setUint16(4, 0, true); // disk number
+            eocdView.setUint16(6, 0, true); // disk with cd
+            eocdView.setUint16(8, fileList.length, true); // entries on disk
+            eocdView.setUint16(10, fileList.length, true); // total entries
+            eocdView.setUint32(12, cdSize, true); // cd size
+            eocdView.setUint32(16, offset, true); // cd offset
+            eocdView.setUint16(20, 0, true); // comment length
+
+            var parts = localFiles.concat(centralDirectory, [new Uint8Array(eocd)]);
+            resolve(new Blob(parts, { type: 'application/zip' }));
+        });
+    }
+
+    // CRC32 calculation for ZIP
+    function crc32(bytes) {
+        var table = crc32.table;
+        if (!table) {
+            table = crc32.table = new Uint32Array(256);
+            for (var i = 0; i < 256; i++) {
+                var c = i;
+                for (var j = 0; j < 8; j++) {
+                    c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                }
+                table[i] = c;
+            }
+        }
+        var crc = 0xFFFFFFFF;
+        for (var k = 0; k < bytes.length; k++) {
+            crc = table[(crc ^ bytes[k]) & 0xFF] ^ (crc >>> 8);
+        }
+        return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    // ==========================================
     // Toast Notifications
     // ==========================================
     function showToast(message, type) {
@@ -2259,8 +2675,160 @@
     }
 
     // ==========================================
+    // Environment Picker
+    // ==========================================
+    function showEnvPicker() {
+        elements.envPickerOverlay.classList.remove('hidden');
+    }
+
+    // Bind env card clicks once (outside showEnvPicker to avoid duplicates)
+    elements.envCardWeb.addEventListener('click', function() {
+        selectEnvironment('web');
+    });
+
+    elements.envCardPython.addEventListener('click', function() {
+        selectEnvironment('python');
+    });
+
+    function selectEnvironment(env) {
+        currentEnvironment = env;
+
+        // Hide the picker
+        elements.envPickerOverlay.classList.add('hidden');
+
+        // Load Pyodide script dynamically if Python env selected
+        if (env === 'python' && !pyodideLoaded) {
+            var script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js';
+            script.onload = function() {
+                pyodideLoaded = true;
+                applyEnvironment(env);
+                initEditor();
+            };
+            document.head.appendChild(script);
+        } else {
+            applyEnvironment(env);
+            initEditor();
+        }
+    }
+
+    function applyEnvironment(env) {
+        var webTabs = elements.fileTabs.querySelectorAll('[data-file="html"], [data-file="css"], [data-file="js"]');
+        var pythonTab = elements.fileTabs.querySelector('[data-file="python"]');
+        var allTabs = elements.fileTabs.querySelectorAll('.tab');
+
+        // Remove all active states first
+        allTabs.forEach(function(t) { t.classList.remove('active'); });
+
+        if (env === 'web') {
+            // Show web tabs, hide python tab
+            webTabs.forEach(function(t) { t.style.display = ''; });
+            if (pythonTab) pythonTab.style.display = 'none';
+
+            // Mark HTML tab as active
+            var htmlTab = elements.fileTabs.querySelector('[data-file="html"]');
+            if (htmlTab) htmlTab.classList.add('active');
+
+            // Right panel: show Preview + Console tabs, hide Python tab
+            elements.btnPreviewTab.style.display = '';
+            elements.btnConsoleTab.style.display = '';
+            elements.btnPythonTab.style.display = 'none';
+
+            // Show auto-preview & refresh buttons
+            elements.btnAutoPreview.style.display = '';
+            elements.btnRefreshPreview.style.display = '';
+
+            // Switch to preview panel
+            switchPanel('preview');
+
+            // Set default active file
+            activeFile = 'html';
+
+        } else if (env === 'python') {
+            // Show python tab, hide web tabs
+            webTabs.forEach(function(t) { t.style.display = 'none'; });
+            if (pythonTab) {
+                pythonTab.style.display = '';
+                pythonTab.classList.add('active');
+            }
+
+            // Right panel: hide Preview + Console, show Python output
+            elements.btnPreviewTab.style.display = 'none';
+            elements.btnConsoleTab.style.display = 'none';
+            elements.btnPythonTab.style.display = '';
+
+            // Hide auto-preview & refresh buttons (not relevant for Python)
+            elements.btnAutoPreview.style.display = 'none';
+            elements.btnRefreshPreview.style.display = 'none';
+
+            // Switch to python panel
+            switchPanel('python');
+
+            // Set active file
+            activeFile = 'python';
+        }
+
+        // Update header env indicator
+        document.body.setAttribute('data-env', env);
+    }
+
+    function switchEnvironment() {
+        // Reset state
+        if (appMode === 'playing' || appMode === 'paused') {
+            player.stop();
+            editor.updateOptions({ readOnly: false });
+            isIgnoringChanges = false;
+        }
+
+        // Destroy editor
+        if (editor) {
+            editor.dispose();
+            editor = null;
+        }
+
+        // Clear editor container
+        elements.editorContainer.innerHTML = '';
+
+        // Dispose models
+        Object.keys(files).forEach(function(key) {
+            if (files[key].model) {
+                files[key].model.dispose();
+                files[key].model = null;
+            }
+            files[key].state = null;
+            files[key].content = '';
+        });
+
+        // Reset app state
+        appMode = 'idle';
+        currentRecording = null;
+
+        // Reset recording UI
+        elements.btnRecord.classList.remove('recording', 'hidden');
+        elements.btnContinueRecord.classList.add('hidden');
+        elements.btnStopRecord.classList.add('hidden');
+        elements.btnAddSection.classList.add('hidden');
+        elements.btnAddExercise.classList.add('hidden');
+        elements.btnPlay.classList.add('hidden');
+        elements.btnPause.classList.add('hidden');
+        elements.btnRestart.classList.add('hidden');
+        elements.btnSave.classList.add('hidden');
+        elements.btnNew.classList.add('hidden');
+        elements.btnEditRecording.classList.add('hidden');
+        elements.pauseBar.classList.add('hidden');
+        elements.exercisePauseBar.classList.add('hidden');
+        elements.timelineContainer.classList.add('hidden');
+        elements.speedControl.classList.add('hidden');
+        elements.statusMessage.textContent = 'Pronto para gravar';
+        elements.statusMessage.className = 'status-message';
+
+        // Show picker again
+        elements.envPickerOverlay.classList.remove('hidden');
+    }
+
+    // ==========================================
     // Initialize
     // ==========================================
-    initEditor();
+    showEnvPicker();
 
 })();

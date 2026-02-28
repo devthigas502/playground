@@ -406,6 +406,7 @@ body {
 .tab-dot-html { background: #f7768e; }
 .tab-dot-css  { background: #7aa2f7; }
 .tab-dot-js   { background: #e0af68; }
+.tab-dot-python { background: #3572A5; }
 
 .file-tabs {
     display: flex;
@@ -801,6 +802,104 @@ body {
 
 .console-line.info {
     color: var(--blue);
+}
+
+/* ============================================
+   Python Panel
+   ============================================ */
+.python-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.python-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--nvim-statusline-bg, #24283b);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.btn-python-run {
+    background: #306998 !important;
+    color: #FFD43B !important;
+    border: 1px solid #3572A5 !important;
+    font-weight: 600;
+    gap: 4px;
+}
+
+.btn-python-run:hover {
+    background: #3572A5 !important;
+}
+
+.btn-python-run:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.python-status {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+.python-status.loading {
+    color: var(--yellow);
+}
+
+.python-status.running {
+    color: var(--accent-primary);
+}
+
+.python-status.success {
+    color: var(--green);
+}
+
+.python-status.error {
+    color: var(--red);
+}
+
+.python-output {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    background: var(--bg-primary);
+}
+
+.python-welcome {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.python-line {
+    padding: 2px 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.python-line.stdout {
+    color: var(--text-primary);
+}
+
+.python-line.stderr {
+    color: var(--red);
+    background: rgba(239, 68, 68, 0.05);
+    padding: 4px 8px;
+    border-radius: var(--border-radius-sm);
+}
+
+.python-line.info {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 12px;
 }
 
 /* ============================================
@@ -2220,4 +2319,247 @@ body {
 .light-theme .te-type-preview-update {
     background: rgba(88, 117, 57, 0.1);
     color: #587539;
+}
+
+/* ============================================
+   Environment Picker Modal
+   ============================================ */
+.env-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 10, 20, 0.92);
+    backdrop-filter: blur(12px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.env-picker-overlay.hidden {
+    display: none;
+}
+
+.env-picker-modal {
+    max-width: 700px;
+    width: 90vw;
+    animation: modalSlide 0.35s ease;
+}
+
+.env-picker-header {
+    text-align: center;
+    margin-bottom: 36px;
+}
+
+.env-picker-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.env-picker-logo svg {
+    color: var(--accent-primary);
+}
+
+.env-picker-logo span {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent-secondary);
+    letter-spacing: -0.5px;
+}
+
+.env-picker-subtitle {
+    color: var(--text-muted);
+    font-size: 15px;
+    margin: 0;
+}
+
+.env-picker-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 600px) {
+    .env-picker-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+.env-card {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 16px;
+    padding: 28px 24px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    position: relative;
+    overflow: hidden;
+}
+
+.env-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.env-card[data-env="web"]::before {
+    background: linear-gradient(135deg, rgba(247, 118, 142, 0.06), rgba(122, 162, 247, 0.06), rgba(224, 175, 104, 0.06));
+}
+
+.env-card[data-env="python"]::before {
+    background: linear-gradient(135deg, rgba(54, 108, 156, 0.08), rgba(255, 195, 49, 0.06));
+}
+
+.env-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.env-card:hover::before {
+    opacity: 1;
+}
+
+.env-card:active {
+    transform: translateY(-2px);
+}
+
+.env-card-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.env-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.env-icon-html {
+    background: rgba(247, 118, 142, 0.15);
+    color: #f7768e;
+}
+
+.env-icon-css {
+    background: rgba(122, 162, 247, 0.15);
+    color: #7aa2f7;
+}
+
+.env-icon-js {
+    background: rgba(224, 175, 104, 0.15);
+    color: #e0af68;
+}
+
+.env-icon-python {
+    background: rgba(54, 108, 156, 0.12);
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+}
+
+.env-card h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.env-card p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.env-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.env-tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+/* Light theme overrides for env picker */
+body.light-theme .env-picker-overlay {
+    background: rgba(200, 200, 210, 0.92);
+}
+
+body.light-theme .env-card:hover {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* ==========================================
+   Import / Export File Actions
+   ========================================== */
+.header-file-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: -4px;
+    padding: 0 4px;
+    border-left: 1px solid var(--border-color);
+}
+
+.header-file-actions .btn-icon {
+    padding: 6px;
+    border-radius: 6px;
+    position: relative;
+}
+
+.header-file-actions .btn-icon:hover {
+    background: var(--bg-hover);
+    color: var(--accent-primary);
+}
+
+.header-file-actions .btn-icon::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 100;
+    border: 1px solid var(--border-color);
+}
+
+.header-file-actions .btn-icon:hover::after {
+    opacity: 1;
 }

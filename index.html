@@ -43,6 +43,34 @@
                     <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
                 </svg>
             </button>
+            <button id="btnSwitchEnv" class="btn btn-icon" title="Trocar ambiente">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            </button>
+            <div class="header-file-actions">
+                <button id="btnImportFile" class="btn btn-icon" title="Importar arquivo">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </button>
+                <button id="btnExportFile" class="btn btn-icon" title="Exportar arquivo atual">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </button>
+                <button id="btnExportAll" class="btn btn-icon" title="Exportar todos os arquivos (.zip)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                        <rect x="16" y="1" width="4" height="6" rx="1" fill="currentColor" opacity="0.3"/>
+                    </svg>
+                </button>
+                <input type="file" id="importFileInput" class="hidden" accept=".html,.htm,.css,.js,.py,.txt">
+            </div>
             <button id="btnShortcuts" class="btn btn-icon btn-shortcuts" title="Atalhos (Ctrl+/)">
                 <span>?</span>
             </button>
@@ -89,6 +117,10 @@
                         <span class="tab-dot tab-dot-js"></span>
                         <span>script.js</span>
                     </div>
+                    <div class="tab" data-file="python">
+                        <span class="tab-dot tab-dot-python"></span>
+                        <span>main.py</span>
+                    </div>
                 </div>
                 <div class="nvim-tab-right">                    <button id="btnExpandEditor" class="btn btn-icon btn-expand" title="Expandir editor (Ctrl+Shift+E)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
@@ -125,6 +157,10 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
                     Console
                 </button>
+                <button class="panel-tab" id="btnPythonTab" data-panel="python">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 4.02 2 6.5V10c0 2.48 4.48 4.5 10 4.5s10-2.02 10-4.5V6.5C22 4.02 17.52 2 12 2z"/><path d="M2 10v3.5C2 15.98 6.48 18 12 18s10-2.02 10-4.5V10"/><path d="M2 13.5V17c0 2.48 4.48 4.5 10 4.5s10-2.02 10-4.5v-3.5"/></svg>
+                    Python
+                </button>
                 <div class="panel-tab-actions">
                     <button id="btnExpandPanel" class="btn btn-icon btn-sm btn-expand" title="Expandir painel (Ctrl+Shift+B)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
@@ -147,6 +183,28 @@
             <div class="console-panel hidden" id="consolePanel">
                 <div id="consoleOutput" class="console-output">
                     <div class="console-welcome">// Console output</div>
+                </div>
+            </div>
+
+            <!-- Python Output -->
+            <div class="python-panel hidden" id="pythonPanel">
+                <div class="python-toolbar">
+                    <button id="btnRunPython" class="btn btn-sm btn-python-run" title="Executar Python (Ctrl+Enter)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        Executar
+                    </button>
+                    <button id="btnClearPython" class="btn btn-sm" title="Limpar saída">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        Limpar
+                    </button>
+                    <button id="btnResetPython" class="btn btn-sm" title="Reiniciar ambiente Python">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        Reset
+                    </button>
+                    <span id="pythonStatus" class="python-status">Python pronto</span>
+                </div>
+                <div id="pythonOutput" class="python-output">
+                    <div class="python-welcome"># Saída do Python aparecerá aqui<br># Use Ctrl+Enter ou o botão Executar</div>
                 </div>
             </div>
         </div>
@@ -382,6 +440,7 @@
                     <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>1</kbd><span>index.html</span></div>
                     <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>2</kbd><span>style.css</span></div>
                     <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>3</kbd><span>script.js</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl</kbd> + <kbd>4</kbd><span>main.py</span></div>
                 </div>
                 <div class="shortcuts-group">
                     <h4>Painéis</h4>
@@ -458,11 +517,61 @@
         </div>
     </div>
 
+    <!-- Environment Picker Modal -->
+    <div id="envPickerOverlay" class="env-picker-overlay">
+        <div class="env-picker-modal">
+            <div class="env-picker-header">
+                <div class="env-picker-logo">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span>Playground</span>
+                </div>
+                <p class="env-picker-subtitle">Escolha o ambiente de desenvolvimento</p>
+            </div>
+            <div class="env-picker-cards">
+                <!-- HTML/CSS/JS Card -->
+                <button class="env-card" id="envCardWeb" data-env="web">
+                    <div class="env-card-icons">
+                        <span class="env-icon env-icon-html">&lt;/&gt;</span>
+                        <span class="env-icon env-icon-css">#</span>
+                        <span class="env-icon env-icon-js">JS</span>
+                    </div>
+                    <h3>HTML / CSS / JS</h3>
+                    <p>Editor multi-arquivo com preview ao vivo, console e hot-reload.</p>
+                    <div class="env-card-tags">
+                        <span class="env-tag">index.html</span>
+                        <span class="env-tag">style.css</span>
+                        <span class="env-tag">script.js</span>
+                    </div>
+                </button>
+                <!-- Python Card -->
+                <button class="env-card" id="envCardPython" data-env="python">
+                    <div class="env-card-icons">
+                        <span class="env-icon env-icon-python">
+                            <svg width="28" height="28" viewBox="0 0 256 255" fill="none">
+                                <path d="M126.916.072c-64.832 0-60.784 28.115-60.784 28.115l.072 29.128h61.868v8.745H41.631S.145 61.355.145 126.77c0 65.417 36.21 63.097 36.21 63.097h21.61v-30.356s-1.165-36.21 35.632-36.21h61.362s34.475.557 34.475-33.319V33.97S194.67.072 126.916.072zM92.802 19.66a11.12 11.12 0 0 1 11.13 11.13 11.12 11.12 0 0 1-11.13 11.13 11.12 11.12 0 0 1-11.13-11.13 11.12 11.12 0 0 1 11.13-11.13z" fill="#366C9C"/>
+                                <path d="M128.757 254.126c64.832 0 60.784-28.115 60.784-28.115l-.072-29.127H127.6v-8.745h86.441s41.486 4.705 41.486-60.712c0-65.416-36.21-63.096-36.21-63.096h-21.61v30.355s1.165 36.21-35.632 36.21h-61.362s-34.475-.557-34.475 33.32v56.013s-5.235 33.897 62.519 33.897zm34.114-19.586a11.12 11.12 0 0 1-11.13-11.13 11.12 11.12 0 0 1 11.13-11.131 11.12 11.12 0 0 1 11.13 11.13 11.12 11.12 0 0 1-11.13 11.13z" fill="#FFC331"/>
+                            </svg>
+                        </span>
+                    </div>
+                    <h3>Python</h3>
+                    <p>Interpretador Python completo via WebAssembly (Pyodide). Execute código direto no navegador.</p>
+                    <div class="env-card-tags">
+                        <span class="env-tag">main.py</span>
+                        <span class="env-tag">Pyodide WASM</span>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast notifications -->
     <div id="toastContainer" class="toast-container"></div>
 
     <!-- Monaco Editor from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <script src="js/python-runner.js"></script>
     <script src="js/recorder.js"></script>
     <script src="js/player.js"></script>
     <script src="js/app.js"></script>
