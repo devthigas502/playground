@@ -177,11 +177,11 @@
     // Default File Contents
     // ==========================================
     const defaultContents = {
-        html: '<div class="container">\n    <h1>Ol\u00e1, CodeCast! \ud83c\udfac</h1>\n    <p>Escreva apenas as tags HTML necess\u00e1rias.</p>\n    <p>A estrutura do documento \u00e9 gerada automaticamente!</p>\n\n    <button id="btnHello" class="btn">Clique aqui</button>\n    <p id="output" class="output"></p>\n</div>',
+        html: '',
 
-        css: '* {\n    margin: 0;\n    padding: 0;\n    box-sizing: border-box;\n}\n\nbody {\n    font-family: \'Segoe UI\', Tahoma, sans-serif;\n    background: linear-gradient(135deg, #1a1b26 0%, #24283b 100%);\n    color: #c0caf5;\n    min-height: 100vh;\n    display: flex;\n    justify-content: center;\n    align-items: center;\n}\n\n.container {\n    text-align: center;\n    padding: 3rem;\n    background: rgba(255, 255, 255, 0.05);\n    border-radius: 16px;\n    backdrop-filter: blur(10px);\n    border: 1px solid rgba(255, 255, 255, 0.1);\n    max-width: 500px;\n}\n\nh1 {\n    font-size: 2rem;\n    margin-bottom: 1rem;\n    background: linear-gradient(90deg, #7aa2f7, #bb9af7);\n    -webkit-background-clip: text;\n    -webkit-text-fill-color: transparent;\n}\n\np {\n    margin-bottom: 1rem;\n    color: #a9b1d6;\n    line-height: 1.6;\n}\n\n.btn {\n    background: #7aa2f7;\n    color: #1a1b26;\n    border: none;\n    padding: 12px 28px;\n    border-radius: 8px;\n    font-size: 1rem;\n    font-weight: 600;\n    cursor: pointer;\n    transition: all 0.2s ease;\n    margin-top: 0.5rem;\n}\n\n.btn:hover {\n    background: #bb9af7;\n    transform: translateY(-2px);\n    box-shadow: 0 4px 15px rgba(122, 162, 247, 0.3);\n}\n\n.output {\n    margin-top: 1rem;\n    font-size: 1.1rem;\n    color: #9ece6a;\n    min-height: 24px;\n}',
+        css: '',
 
-        js: 'const btn = document.getElementById(\'btnHello\');\nconst output = document.getElementById(\'output\');\n\nlet count = 0;\n\nbtn.addEventListener(\'click\', () => {\n    count++;\n    output.textContent = `Voc\u00ea clicou ${count} vez${count > 1 ? \'es\' : \'\'}! \ud83c\udf89`;\n\n    const colors = [\'#9ece6a\', \'#7aa2f7\', \'#bb9af7\', \'#e0af68\', \'#f7768e\'];\n    output.style.color = colors[count % colors.length];\n});\n\nconsole.log(\'Script carregado!\');\nconsole.log(\'Clique no bot\u00e3o para testar.\');'
+        js: ''
     };
 
     // ==========================================
